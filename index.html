@@ -142,7 +142,7 @@
   <script>
     // === CONFIGURATION - MUST MATCH APPS SCRIPT ===
     // Match the URLs exactly with the Google Apps Script
-    const webAppUrl = "https://script.google.com/macros/s/AKfycbxpfbuiZ_achF6nvtbaajtRpXIZQHowFpIn3G55ccnIh-50nczDbnSlioNlmOXkf4fU/exec";
+    const webAppUrl = "https://script.google.com/macros/s/AKfycbzkM5bq2wfbt485FBaFiTE0GL5mmr5wSNA5b_dxA-_3kwUBJKZnNIy5N4PuzT9atglE/exec";
     
     // === DOM ELEMENTS ===
     const params = new URLSearchParams(window.location.search);
@@ -156,6 +156,7 @@
     
     // === DEBUG HANDLING ===
     let debugLog = []; // Store log entries
+    const DEBUG_MODE = true; // Always enable debug for troubleshooting
     
     function log(message) {
       const timestamp = new Date().toISOString().substring(11, 19);
@@ -170,6 +171,10 @@
       // Update debug display if visible
       if (debugDiv.style.display === 'block') {
         debugDiv.textContent = debugLog.join('\n');
+      }
+      
+      if (DEBUG_MODE) {
+        console.log(entry);
       }
     }
     
@@ -239,12 +244,16 @@
     // Process ID to ensure it's properly formatted
     if (id) {
       try {
-        // Make sure ID is properly decoded before use
-        id = decodeURIComponent(id);
-        log(`Decoded ID parameter: ${id}`);
+        // Make sure ID is properly decoded
+        // We'll only decode it if it appears to be encoded (contains % chars)
+        if (id.includes('%')) {
+          id = decodeURIComponent(id);
+          log(`Decoded ID parameter: ${id}`);
+        } else {
+          log(`ID appears to be already decoded: ${id}`);
+        }
       } catch (e) {
-        log(`ID already decoded or error: ${e.message}`);
-        // Keep original value
+        log(`Error decoding ID: ${e.message}`);
       }
     }
     
@@ -275,7 +284,8 @@
       if (row) sessionStorage.setItem('lastUsedRow', row);
       
       try {
-        window.location.replace(url);
+        // Instead of replace which clears history, use assign to preserve back button
+        window.location.href = url;
       } catch (e) {
         log(`Redirect error: ${e.message}`);
         throw new Error(`Redirect failed: ${e.message}`);
@@ -288,18 +298,20 @@
       let param = null;
       
       if (id) {
-        // Use encodeURIComponent to properly encode the ID for URL use
-        param = `id=${encodeURIComponent(id)}`;
+        // No double-encoding - use the raw ID which we've already handled
+        param = `id=${id}`;
         log(`Using ID parameter for URL: ${id}`);
       } else if (row && !isNaN(parseInt(row, 10))) {
-        param = `row=${encodeURIComponent(row)}`;
+        param = `row=${row}`;
         log(`Using ROW parameter for URL: ${row}`);
       } else {
         throw new Error("No valid identifier found");
       }
       
-      // Build the full target URL
-      return `${webAppUrl}?${param}`;
+      // Build the full target URL without additional encoding
+      const targetUrl = `${webAppUrl}?${param}`;
+      log(`Built target URL: ${targetUrl}`);
+      return targetUrl;
     }
     
     // === MAIN REDIRECT FLOW ===
@@ -350,9 +362,16 @@
       redirect();
     });
     
-    // === INITIALIZATION ===
+    // Show debug info by default during troubleshooting
     window.onload = function() {
       log('Page loaded');
+      
+      // Always show debug during troubleshooting
+      if (DEBUG_MODE) {
+        debugDiv.style.display = 'block';
+        debugDiv.textContent = debugLog.join('\n');
+        debugToggle.textContent = 'Hide Debug Info';
+      }
       
       // Check if we have valid parameters
       if (!id && (!row || isNaN(parseInt(row, 10)))) {
