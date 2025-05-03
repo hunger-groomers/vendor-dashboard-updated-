@@ -142,7 +142,7 @@
   <script>
     // === CONFIGURATION - MUST MATCH APPS SCRIPT ===
     // Match the URLs exactly with the Google Apps Script
-    const webAppUrl = "https://script.google.com/macros/s/AKfycbzTBv0Od8YsqhUU1pLnijA-07jFPvi_krmqAF_Po9DI9cWCu0_mbUVeirmNrmSjl8vW/exec";
+    const webAppUrl = "https://script.google.com/macros/s/AKfycbyhrbT_YaIHhi9JmFZCHzKkAsDFAZc5-iUs7TropV1Ki_JIHBuZY_V5vSKhQdmfbC5W/exec";
     
     // This should be the same URL where this HTML file is hosted
     const dashboardUrl = "https://hunger-groomers.github.io/vendor-dashboard-updated-/"; 
@@ -188,13 +188,48 @@
       }
     });
     
-    // === PARAMETER HANDLING ===
-    // Extract parameters from URL - prioritize id over row
-    const id = params.get('id');
-    const row = params.get('row');
+    // Extract parameters from URL - we need to check both direct parameters and the destination parameter
+let id = params.get('id');
+let row = params.get('row');
+
+// Check if we have a destination parameter (which might contain our id/row)
+const destination = params.get('destination');
+if (destination) {
+  log(`Found destination parameter: ${destination}`);
+  
+  try {
+    // Parse the destination URL to extract its parameters
+    const destUrl = new URL(destination);
+    const destParams = new URLSearchParams(destUrl.search);
     
-    log(`URL Parameters - id: ${id || 'none'}, row: ${row || 'none'}`);
-    log(`Browser location: ${window.location.href}`);
+    // If destination has id/row parameters, use those values
+    if (destParams.has('id') && (!id || id.trim() === "")) {
+      id = destParams.get('id');
+      log(`Extracted id from destination: ${id}`);
+    }
+    
+    if (destParams.has('row') && (!row || isNaN(parseInt(row, 10)))) {
+      row = destParams.get('row');
+      log(`Extracted row from destination: ${row}`);
+    }
+  } catch (e) {
+    log(`Error parsing destination URL: ${e.message}`);
+  }
+}
+
+// Make sure ID is properly decoded
+if (id) {
+  try {
+    // First encode to handle any special chars, then decode to ensure it's in the right format
+    id = encodeURIComponent(decodeURIComponent(id));
+    log(`Processed ID parameter: ${id}`);
+  } catch (e) {
+    log(`Error processing ID: ${e.message}`);
+  }
+}
+
+log(`Final Parameters - id: ${id || 'none'}, row: ${row || 'none'}`);
+log(`Browser location: ${window.location.href}`);
     
     // === STATUS DISPLAY ===
     function showStatus(message, isError = false) {
@@ -232,6 +267,9 @@
         // Build the full API URL
         const apiUrl = `${webAppUrl}?${param}`;
         log(`Calling API: ${apiUrl}`);
+        
+        // Store the target URL for redirection
+        window.targetRedirectUrl = apiUrl;
         
         // Try direct access first (Apps Script doesn't fully support fetch API)
         try {
@@ -348,24 +386,35 @@
         // Record scan first (but proceed with redirect even if it fails)
         await recordScan();
         
-        // Build the final dashboard URL
-        let targetParam;
-        if (id && id.trim() !== "") {
-          targetParam = `id=${encodeURIComponent(id)}`;
-        } else if (row && !isNaN(parseInt(row, 10))) {
-          targetParam = `row=${encodeURIComponent(row)}`;
-        } else {
-          throw new Error("No valid parameters for redirect");
+        // Build the final dashboard URL - use the stored target URL
+        let targetUrl = window.targetRedirectUrl;
+        
+        if (!targetUrl) {
+          // Fallback if targetRedirectUrl wasn't set
+          let targetParam;
+          if (id && id.trim() !== "") {
+            targetParam = `id=${encodeURIComponent(id)}`;
+          } else if (row && !isNaN(parseInt(row, 10))) {
+            targetParam = `row=${encodeURIComponent(row)}`;
+          } else {
+            throw new Error("No valid parameters for redirect");
+          }
+          
+          targetUrl = `${webAppUrl}?${targetParam}`;
         }
         
-        const targetUrl = `${webAppUrl}?${targetParam}`;
         log(`Redirecting directly to Apps Script URL: ${targetUrl}`);
         
         // Redirect after a short delay
         showStatus('Redirecting to vendor dashboard...');
         setTimeout(() => {
           try {
-            window.location.href = targetUrl;
+            // Save the URL parameters in sessionStorage as backup
+            if (id) sessionStorage.setItem('lastUsedId', id);
+            if (row) sessionStorage.setItem('lastUsedRow', row);
+            
+            // Use window.location.replace to prevent breaking the back button
+            window.location.replace(targetUrl);
           } catch (e) {
             throw new Error(`Redirect failed: ${e.message}`);
           }
@@ -385,6 +434,18 @@
     retryBtn.addEventListener('click', function() {
       log('Retry button clicked');
       retryBtn.style.display = 'none';
+      
+      // Check for stored parameters if current ones are invalid
+      if ((!id || id.trim() === "") && sessionStorage.getItem('lastUsedId')) {
+        id = sessionStorage.getItem('lastUsedId');
+        log(`Retrieved id from sessionStorage: ${id}`);
+      }
+      
+      if ((!row || isNaN(parseInt(row, 10))) && sessionStorage.getItem('lastUsedRow')) {
+        row = sessionStorage.getItem('lastUsedRow');
+        log(`Retrieved row from sessionStorage: ${row}`);
+      }
+      
       redirect();
     });
     
@@ -400,13 +461,23 @@
       
       // Show error if no valid parameters
       if ((!id || id.trim() === "") && (!row || isNaN(parseInt(row, 10)))) {
-        errorDiv.style.display = 'block';
-        log('No valid parameters, showing error message');
-      } else {
-        log('Valid parameters found, will auto-redirect shortly');
-        // Auto-redirect after a short delay
-        setTimeout(redirect, 1500);
+        // Check if we have stored parameters from previous session
+        if (sessionStorage.getItem('lastUsedId')) {
+          id = sessionStorage.getItem('lastUsedId');
+          log(`Retrieved id from sessionStorage: ${id}`);
+        } else if (sessionStorage.getItem('lastUsedRow')) {
+          row = sessionStorage.getItem('lastUsedRow');
+          log(`Retrieved row from sessionStorage: ${row}`);
+        } else {
+          errorDiv.style.display = 'block';
+          log('No valid parameters, showing error message');
+          return;
+        }
       }
+      
+      log('Valid parameters found, will auto-redirect shortly');
+      // Auto-redirect after a short delay
+      setTimeout(redirect, 1500);
     };
   </script>
 </body>
