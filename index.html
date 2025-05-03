@@ -89,6 +89,13 @@
       margin-top: 1rem;
       color: rgba(255,255,255,0.5);
       display: none;
+      white-space: pre-wrap;
+      text-align: left;
+      max-height: 150px;
+      overflow-y: auto;
+      background: rgba(0,0,0,0.2);
+      padding: 8px;
+      border-radius: 4px;
     }
     .retry-btn {
       background: rgba(255, 255, 255, 0.2);
@@ -108,6 +115,13 @@
       margin-top: 1rem;
       display: none;
     }
+    .debug-toggle {
+      font-size: 0.8rem;
+      color: rgba(255,255,255,0.5);
+      margin-top: 1rem;
+      text-decoration: underline;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
@@ -119,16 +133,21 @@
     <div class="loader" id="loader"></div>
     <div id="status" class="status"></div>
     <button id="retryBtn" class="retry-btn">Retry</button>
+    <div class="debug-toggle" id="debugToggle">Show Debug Info</div>
     <div id="debug"></div>
     <div class="privacy-notice">
       Your dashboard provides secure access to your vendor information and current market prices.
     </div>
   </div>
   <script>
-    // Match the URLs with the Google Apps Script configuration
-    const webAppUrl = "https://script.google.com/macros/s/AKfycbzGsKYGj3ysShvU8l0KB1xzR_TqibhYH2pdhvZG6XkeyJKt8ojI8YaCmUKtwyDOUZSK/exec";
-    const dashboardUrl = "https://hunger-groomer.github.io/vendor-dashboard/";
+    // === CONFIGURATION - MUST MATCH APPS SCRIPT ===
+    // Match the URLs exactly with the Google Apps Script
+    const webAppUrl = "https://script.google.com/macros/s/AKfycbzTBv0Od8YsqhUU1pLnijA-07jFPvi_krmqAF_Po9DI9cWCu0_mbUVeirmNrmSjl8vW/exec";
     
+    // This should be the same URL where this HTML file is hosted
+    const dashboardUrl = "https://hunger-groomers.github.io/vendor-dashboard-updated-/"; 
+    
+    // === DOM ELEMENTS ===
     const params = new URLSearchParams(window.location.search);
     const btn = document.getElementById('redirectBtn');
     const retryBtn = document.getElementById('retryBtn');
@@ -136,19 +155,48 @@
     const errorDiv = document.getElementById('error');
     const debugDiv = document.getElementById('debug');
     const statusDiv = document.getElementById('status');
+    const debugToggle = document.getElementById('debugToggle');
     
+    // === DEBUG HANDLING ===
+    let debugLog = []; // Store log entries
+    
+    function log(message) {
+      const timestamp = new Date().toISOString().substring(11, 19);
+      const entry = `[${timestamp}] ${message}`;
+      debugLog.push(entry);
+      
+      // Keep only the last 20 entries
+      if (debugLog.length > 20) {
+        debugLog.shift();
+      }
+      
+      // Update debug display if visible
+      if (debugDiv.style.display === 'block') {
+        debugDiv.textContent = debugLog.join('\n');
+      }
+    }
+    
+    // Show/hide debug info
+    debugToggle.addEventListener('click', function() {
+      if (debugDiv.style.display === 'block') {
+        debugDiv.style.display = 'none';
+        debugToggle.textContent = 'Show Debug Info';
+      } else {
+        debugDiv.style.display = 'block';
+        debugDiv.textContent = debugLog.join('\n');
+        debugToggle.textContent = 'Hide Debug Info';
+      }
+    });
+    
+    // === PARAMETER HANDLING ===
     // Extract parameters from URL - prioritize id over row
     const id = params.get('id');
     const row = params.get('row');
     
-    // For debugging functionality
-    function showDebug(message) {
-      if (params.get('debug') === 'true') {
-        debugDiv.style.display = 'block';
-        debugDiv.textContent = message;
-      }
-    }
+    log(`URL Parameters - id: ${id || 'none'}, row: ${row || 'none'}`);
+    log(`Browser location: ${window.location.href}`);
     
+    // === STATUS DISPLAY ===
     function showStatus(message, isError = false) {
       statusDiv.style.display = 'block';
       statusDiv.textContent = message;
@@ -159,8 +207,11 @@
       } else {
         statusDiv.style.color = 'rgba(255, 255, 255, 0.8)';
       }
+      
+      log(message);
     }
     
+    // === API COMMUNICATION ===
     // Record scan with improved error handling
     async function recordScan() {
       try {
@@ -168,52 +219,123 @@
         let param;
         if (id && id.trim() !== "") {
           param = `id=${encodeURIComponent(id)}`;
+          log(`Using ID parameter: ${id}`);
         } else if (row && !isNaN(parseInt(row, 10))) {
           param = `row=${encodeURIComponent(row)}`;
+          log(`Using ROW parameter: ${row}`);
         } else {
           throw new Error("No valid identifier found");
         }
         
         showStatus('Recording your visit...');
-        showDebug(`API call: ${webAppUrl}?action=recordScan&${param}`);
         
-        // Record the scan with timeout handling
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
+        // Build the full API URL
+        const apiUrl = `${webAppUrl}?${param}`;
+        log(`Calling API: ${apiUrl}`);
         
-        const response = await fetch(`${webAppUrl}?action=recordScan&${param}`, {
-          signal: controller.signal
-        });
-        clearTimeout(timeoutId);
-        
-        if (!response.ok) {
-          throw new Error(`Server responded with status: ${response.status}`);
+        // Try direct access first (Apps Script doesn't fully support fetch API)
+        try {
+          // Use vanilla XMLHttpRequest for better compatibility
+          const xhr = new XMLHttpRequest();
+          xhr.open('GET', apiUrl, true);
+          xhr.timeout = 10000; // 10 second timeout
+          
+          // Set up promises to handle response
+          const requestPromise = new Promise((resolve, reject) => {
+            xhr.onload = function() {
+              if (xhr.status >= 200 && xhr.status < 300) {
+                log(`API response received: ${xhr.responseText.substring(0, 100)}...`);
+                resolve(xhr.responseText);
+              } else {
+                reject(new Error(`HTTP error ${xhr.status}: ${xhr.statusText}`));
+              }
+            };
+            
+            xhr.onerror = function() {
+              reject(new Error('Network request failed'));
+            };
+            
+            xhr.ontimeout = function() {
+              reject(new Error('Request timed out'));
+            };
+          });
+          
+          xhr.send();
+          const responseText = await requestPromise;
+          
+          // Process response
+          try {
+            const responseData = JSON.parse(responseText);
+            if (responseData.success) {
+              showStatus('Visit recorded successfully');
+              return true;
+            } else {
+              throw new Error(responseData.message || 'Unknown API error');
+            }
+          } catch (jsonErr) {
+            log(`Response is not JSON: ${responseText.substring(0, 100)}`);
+            // For Apps Script, often the response is HTML - check if it contains success indicators
+            if (responseText.includes('Success') || responseText.includes('Location') || responseText.includes('Thank you')) {
+              showStatus('Visit recorded, proceeding with redirect');
+              return true;
+            } else {
+              throw new Error('Unable to parse API response');
+            }
+          }
+        } catch (err) {
+          // If XMLHttpRequest fails, try iframe based approach as fallback (sometimes works better with Apps Script)
+          log(`XHR failed, trying iframe approach: ${err.message}`);
+          
+          // Create a hidden iframe to load the URL
+          const iframe = document.createElement('iframe');
+          iframe.style.display = 'none';
+          document.body.appendChild(iframe);
+          
+          // Set up promise to handle iframe load
+          const iframePromise = new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => {
+              reject(new Error('Iframe request timed out'));
+            }, 8000);
+            
+            iframe.onload = function() {
+              clearTimeout(timeout);
+              resolve(true);
+            };
+            
+            iframe.onerror = function() {
+              clearTimeout(timeout);
+              reject(new Error('Iframe request failed'));
+            };
+          });
+          
+          // Load the URL in the iframe
+          iframe.src = apiUrl;
+          
+          try {
+            await iframePromise;
+            document.body.removeChild(iframe);
+            showStatus('Visit recorded with iframe approach');
+            return true;
+          } catch (iframeErr) {
+            document.body.removeChild(iframe);
+            throw iframeErr;
+          }
         }
-        
-        const data = await response.json();
-        
-        if (!data.success) {
-          throw new Error(data.message || 'Unknown error');
-        }
-        
-        showStatus('Visit recorded successfully');
-        return true;
       } catch (err) {
-        if (err.name === 'AbortError') {
-          showStatus('Connection timed out. Please try again.', true);
-        } else {
-          showStatus(`Error: ${err.message}`, true);
-        }
-        showDebug(`Scan error: ${err.message}`);
-        return false;
+        showStatus(`Error: ${err.message}`, true);
+        log(`Scan error: ${err.message}`);
+        
+        // Still return true to allow redirect even if scan recording fails
+        return true;
       }
     }
     
-    // Handle the redirect process
+    // === MAIN REDIRECT FLOW ===
     async function redirect() {
       // Check if we have any valid parameter
       if ((!id || id.trim() === "") && (!row || isNaN(parseInt(row, 10)))) {
         errorDiv.style.display = 'block';
+        log('No valid parameters found, showing error');
         return;
       }
       
@@ -223,59 +345,66 @@
       retryBtn.style.display = 'none';
       
       try {
-        // Record scan first
-        const scanRecorded = await recordScan();
+        // Record scan first (but proceed with redirect even if it fails)
+        await recordScan();
         
-        // Continue with redirect even if scan recording fails
-        // Select the appropriate parameter for the redirect (prioritize id)
-        let targetUrl;
+        // Build the final dashboard URL
+        let targetParam;
         if (id && id.trim() !== "") {
-          targetUrl = `${dashboardUrl}?id=${encodeURIComponent(id)}`;
+          targetParam = `id=${encodeURIComponent(id)}`;
         } else if (row && !isNaN(parseInt(row, 10))) {
-          targetUrl = `${dashboardUrl}?row=${encodeURIComponent(row)}`;
+          targetParam = `row=${encodeURIComponent(row)}`;
         } else {
           throw new Error("No valid parameters for redirect");
         }
         
-        showDebug(`Redirecting to: ${targetUrl}`);
-        showStatus('Redirecting to your dashboard...');
+        const targetUrl = `${webAppUrl}?${targetParam}`;
+        log(`Redirecting directly to Apps Script URL: ${targetUrl}`);
         
-        // Perform redirect after a short delay
+        // Redirect after a short delay
+        showStatus('Redirecting to vendor dashboard...');
         setTimeout(() => {
           try {
             window.location.href = targetUrl;
           } catch (e) {
             throw new Error(`Redirect failed: ${e.message}`);
           }
-        }, 800);
+        }, 1000);
       } catch (err) {
         errorDiv.style.display = 'block';
         errorDiv.textContent = err.message;
         btn.style.display = 'inline-block';
         loader.style.display = 'none';
         showStatus(err.message, true);
+        log(`Redirect error: ${err.message}`);
       }
     }
     
+    // === EVENT HANDLERS ===
     // Handle retry functionality
-    retryBtn.addEventListener('click', () => {
+    retryBtn.addEventListener('click', function() {
+      log('Retry button clicked');
       retryBtn.style.display = 'none';
       redirect();
     });
     
     // Attach click handler to main button
-    btn.addEventListener('click', redirect);
+    btn.addEventListener('click', function() {
+      log('Main button clicked');
+      redirect();
+    });
     
-    // Auto-redirect if parameters are present
+    // === INITIALIZATION ===
     window.onload = function() {
-      // Debug info
-      showDebug(`Parameters: id=${id}, row=${row}`);
+      log('Page loaded');
       
       // Show error if no valid parameters
       if ((!id || id.trim() === "") && (!row || isNaN(parseInt(row, 10)))) {
         errorDiv.style.display = 'block';
+        log('No valid parameters, showing error message');
       } else {
-        // Auto-redirect after a short delay (gives users time to see the page)
+        log('Valid parameters found, will auto-redirect shortly');
+        // Auto-redirect after a short delay
         setTimeout(redirect, 1500);
       }
     };
