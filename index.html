@@ -142,10 +142,7 @@
   <script>
     // === CONFIGURATION - MUST MATCH APPS SCRIPT ===
     // Match the URLs exactly with the Google Apps Script
-    const webAppUrl = "https://script.google.com/macros/s/AKfycbwgp-z2xgwFzxnD4WvFtzqw3SE3GaQJPK79SaA9IDKLgcMJgWe6O8hsdpCQqeBzyj9w/exec";
-    
-    // This should be the same URL where this HTML file is hosted
-    const dashboardUrl = "https://hunger-groomers.github.io/vendor-dashboard-updated-/"; 
+    const webAppUrl = "https://script.google.com/macros/s/AKfycbyUzXiTJPSwQNOrRIf8Xl0J4hE_hPLNKOysWk0KutNoLySpD64GFG9KCAq-VADMXNl8/exec";
     
     // === DOM ELEMENTS ===
     const params = new URLSearchParams(window.location.search);
@@ -188,48 +185,71 @@
       }
     });
     
-    // Extract parameters from URL - we need to check both direct parameters and the destination parameter
-let id = params.get('id');
-let row = params.get('row');
+    // === EXTRACT AND PROCESS PARAMETERS ===
+    // Extract parameters - simplified and more robust approach
+    let id = null;
+    let row = null;
 
-// Check if we have a destination parameter (which might contain our id/row)
-const destination = params.get('destination');
-if (destination) {
-  log(`Found destination parameter: ${destination}`);
-  
-  try {
-    // Parse the destination URL to extract its parameters
-    const destUrl = new URL(destination);
-    const destParams = new URLSearchParams(destUrl.search);
-    
-    // If destination has id/row parameters, use those values
-    if (destParams.has('id') && (!id || id.trim() === "")) {
-      id = destParams.get('id');
-      log(`Extracted id from destination: ${id}`);
+    // First check direct URL parameters
+    if (params.has('id')) {
+      id = params.get('id');
+      log(`Found direct id parameter: ${id}`);
     }
     
-    if (destParams.has('row') && (!row || isNaN(parseInt(row, 10)))) {
-      row = destParams.get('row');
-      log(`Extracted row from destination: ${row}`);
+    if (params.has('row')) {
+      row = params.get('row');
+      log(`Found direct row parameter: ${row}`);
     }
-  } catch (e) {
-    log(`Error parsing destination URL: ${e.message}`);
-  }
-}
-
-// Make sure ID is properly decoded
-if (id) {
-  try {
-    // First encode to handle any special chars, then decode to ensure it's in the right format
-    id = encodeURIComponent(decodeURIComponent(id));
-    log(`Processed ID parameter: ${id}`);
-  } catch (e) {
-    log(`Error processing ID: ${e.message}`);
-  }
-}
-
-log(`Final Parameters - id: ${id || 'none'}, row: ${row || 'none'}`);
-log(`Browser location: ${window.location.href}`);
+    
+    // Next check for a destination parameter
+    if (params.has('destination')) {
+      const destination = params.get('destination');
+      log(`Found destination parameter: ${destination}`);
+      
+      try {
+        const destUrl = new URL(destination);
+        const destParams = new URLSearchParams(destUrl.search);
+        
+        // Only override if we didn't already find a value
+        if (!id && destParams.has('id')) {
+          id = destParams.get('id');
+          log(`Extracted id from destination: ${id}`);
+        }
+        
+        if (!row && destParams.has('row')) {
+          row = destParams.get('row');
+          log(`Extracted row from destination: ${row}`);
+        }
+      } catch (e) {
+        log(`Error parsing destination URL: ${e.message}`);
+      }
+    }
+    
+    // Use sessionStorage as last resort
+    if (!id && sessionStorage.getItem('lastUsedId')) {
+      id = sessionStorage.getItem('lastUsedId');
+      log(`Retrieved id from sessionStorage: ${id}`);
+    }
+    
+    if (!row && sessionStorage.getItem('lastUsedRow')) {
+      row = sessionStorage.getItem('lastUsedRow');
+      log(`Retrieved row from sessionStorage: ${row}`);
+    }
+    
+    // Process ID to ensure it's properly formatted
+    if (id) {
+      try {
+        // Make sure ID is properly decoded before use
+        id = decodeURIComponent(id);
+        log(`Decoded ID parameter: ${id}`);
+      } catch (e) {
+        log(`ID already decoded or error: ${e.message}`);
+        // Keep original value
+      }
+    }
+    
+    log(`Final Parameters - id: ${id || 'none'}, row: ${row || 'none'}`);
+    log(`Browser location: ${window.location.href}`);
     
     // === STATUS DISPLAY ===
     function showStatus(message, isError = false) {
@@ -246,132 +266,46 @@ log(`Browser location: ${window.location.href}`);
       log(message);
     }
     
-    // === API COMMUNICATION ===
-    // Record scan with improved error handling
-    async function recordScan() {
+    // === DIRECT REDIRECT FUNCTION ===
+    function directRedirect(url) {
+      log(`Performing direct redirect to: ${url}`);
+      
+      // Save parameters in sessionStorage for backup
+      if (id) sessionStorage.setItem('lastUsedId', id);
+      if (row) sessionStorage.setItem('lastUsedRow', row);
+      
       try {
-        // Determine which parameter to use - prioritize id over row
-        let param;
-        if (id && id.trim() !== "") {
-          param = `id=${encodeURIComponent(id)}`;
-          log(`Using ID parameter: ${id}`);
-        } else if (row && !isNaN(parseInt(row, 10))) {
-          param = `row=${encodeURIComponent(row)}`;
-          log(`Using ROW parameter: ${row}`);
-        } else {
-          throw new Error("No valid identifier found");
-        }
-        
-        showStatus('Recording your visit...');
-        
-        // Build the full API URL
-        const apiUrl = `${webAppUrl}?${param}`;
-        log(`Calling API: ${apiUrl}`);
-        
-        // Store the target URL for redirection
-        window.targetRedirectUrl = apiUrl;
-        
-        // Try direct access first (Apps Script doesn't fully support fetch API)
-        try {
-          // Use vanilla XMLHttpRequest for better compatibility
-          const xhr = new XMLHttpRequest();
-          xhr.open('GET', apiUrl, true);
-          xhr.timeout = 10000; // 10 second timeout
-          
-          // Set up promises to handle response
-          const requestPromise = new Promise((resolve, reject) => {
-            xhr.onload = function() {
-              if (xhr.status >= 200 && xhr.status < 300) {
-                log(`API response received: ${xhr.responseText.substring(0, 100)}...`);
-                resolve(xhr.responseText);
-              } else {
-                reject(new Error(`HTTP error ${xhr.status}: ${xhr.statusText}`));
-              }
-            };
-            
-            xhr.onerror = function() {
-              reject(new Error('Network request failed'));
-            };
-            
-            xhr.ontimeout = function() {
-              reject(new Error('Request timed out'));
-            };
-          });
-          
-          xhr.send();
-          const responseText = await requestPromise;
-          
-          // Process response
-          try {
-            const responseData = JSON.parse(responseText);
-            if (responseData.success) {
-              showStatus('Visit recorded successfully');
-              return true;
-            } else {
-              throw new Error(responseData.message || 'Unknown API error');
-            }
-          } catch (jsonErr) {
-            log(`Response is not JSON: ${responseText.substring(0, 100)}`);
-            // For Apps Script, often the response is HTML - check if it contains success indicators
-            if (responseText.includes('Success') || responseText.includes('Location') || responseText.includes('Thank you')) {
-              showStatus('Visit recorded, proceeding with redirect');
-              return true;
-            } else {
-              throw new Error('Unable to parse API response');
-            }
-          }
-        } catch (err) {
-          // If XMLHttpRequest fails, try iframe based approach as fallback (sometimes works better with Apps Script)
-          log(`XHR failed, trying iframe approach: ${err.message}`);
-          
-          // Create a hidden iframe to load the URL
-          const iframe = document.createElement('iframe');
-          iframe.style.display = 'none';
-          document.body.appendChild(iframe);
-          
-          // Set up promise to handle iframe load
-          const iframePromise = new Promise((resolve, reject) => {
-            const timeout = setTimeout(() => {
-              reject(new Error('Iframe request timed out'));
-            }, 8000);
-            
-            iframe.onload = function() {
-              clearTimeout(timeout);
-              resolve(true);
-            };
-            
-            iframe.onerror = function() {
-              clearTimeout(timeout);
-              reject(new Error('Iframe request failed'));
-            };
-          });
-          
-          // Load the URL in the iframe
-          iframe.src = apiUrl;
-          
-          try {
-            await iframePromise;
-            document.body.removeChild(iframe);
-            showStatus('Visit recorded with iframe approach');
-            return true;
-          } catch (iframeErr) {
-            document.body.removeChild(iframe);
-            throw iframeErr;
-          }
-        }
-      } catch (err) {
-        showStatus(`Error: ${err.message}`, true);
-        log(`Scan error: ${err.message}`);
-        
-        // Still return true to allow redirect even if scan recording fails
-        return true;
+        window.location.replace(url);
+      } catch (e) {
+        log(`Redirect error: ${e.message}`);
+        throw new Error(`Redirect failed: ${e.message}`);
       }
+    }
+    
+    // === BUILD TARGET URL ===
+    function buildTargetUrl() {
+      // Determine which parameter to use
+      let param = null;
+      
+      if (id) {
+        // Use encodeURIComponent to properly encode the ID for URL use
+        param = `id=${encodeURIComponent(id)}`;
+        log(`Using ID parameter for URL: ${id}`);
+      } else if (row && !isNaN(parseInt(row, 10))) {
+        param = `row=${encodeURIComponent(row)}`;
+        log(`Using ROW parameter for URL: ${row}`);
+      } else {
+        throw new Error("No valid identifier found");
+      }
+      
+      // Build the full target URL
+      return `${webAppUrl}?${param}`;
     }
     
     // === MAIN REDIRECT FLOW ===
     async function redirect() {
       // Check if we have any valid parameter
-      if ((!id || id.trim() === "") && (!row || isNaN(parseInt(row, 10)))) {
+      if (!id && (!row || isNaN(parseInt(row, 10)))) {
         errorDiv.style.display = 'block';
         log('No valid parameters found, showing error');
         return;
@@ -383,41 +317,14 @@ log(`Browser location: ${window.location.href}`);
       retryBtn.style.display = 'none';
       
       try {
-        // Record scan first (but proceed with redirect even if it fails)
-        await recordScan();
+        // Build the target URL
+        const targetUrl = buildTargetUrl();
+        log(`Target URL built: ${targetUrl}`);
         
-        // Build the final dashboard URL - use the stored target URL
-        let targetUrl = window.targetRedirectUrl;
-        
-        if (!targetUrl) {
-          // Fallback if targetRedirectUrl wasn't set
-          let targetParam;
-          if (id && id.trim() !== "") {
-            targetParam = `id=${encodeURIComponent(id)}`;
-          } else if (row && !isNaN(parseInt(row, 10))) {
-            targetParam = `row=${encodeURIComponent(row)}`;
-          } else {
-            throw new Error("No valid parameters for redirect");
-          }
-          
-          targetUrl = `${webAppUrl}?${targetParam}`;
-        }
-        
-        log(`Redirecting directly to Apps Script URL: ${targetUrl}`);
-        
-        // Redirect after a short delay
+        // Show status and redirect after a short delay
         showStatus('Redirecting to vendor dashboard...');
         setTimeout(() => {
-          try {
-            // Save the URL parameters in sessionStorage as backup
-            if (id) sessionStorage.setItem('lastUsedId', id);
-            if (row) sessionStorage.setItem('lastUsedRow', row);
-            
-            // Use window.location.replace to prevent breaking the back button
-            window.location.replace(targetUrl);
-          } catch (e) {
-            throw new Error(`Redirect failed: ${e.message}`);
-          }
+          directRedirect(targetUrl);
         }, 1000);
       } catch (err) {
         errorDiv.style.display = 'block';
@@ -434,18 +341,6 @@ log(`Browser location: ${window.location.href}`);
     retryBtn.addEventListener('click', function() {
       log('Retry button clicked');
       retryBtn.style.display = 'none';
-      
-      // Check for stored parameters if current ones are invalid
-      if ((!id || id.trim() === "") && sessionStorage.getItem('lastUsedId')) {
-        id = sessionStorage.getItem('lastUsedId');
-        log(`Retrieved id from sessionStorage: ${id}`);
-      }
-      
-      if ((!row || isNaN(parseInt(row, 10))) && sessionStorage.getItem('lastUsedRow')) {
-        row = sessionStorage.getItem('lastUsedRow');
-        log(`Retrieved row from sessionStorage: ${row}`);
-      }
-      
       redirect();
     });
     
@@ -459,20 +354,11 @@ log(`Browser location: ${window.location.href}`);
     window.onload = function() {
       log('Page loaded');
       
-      // Show error if no valid parameters
-      if ((!id || id.trim() === "") && (!row || isNaN(parseInt(row, 10)))) {
-        // Check if we have stored parameters from previous session
-        if (sessionStorage.getItem('lastUsedId')) {
-          id = sessionStorage.getItem('lastUsedId');
-          log(`Retrieved id from sessionStorage: ${id}`);
-        } else if (sessionStorage.getItem('lastUsedRow')) {
-          row = sessionStorage.getItem('lastUsedRow');
-          log(`Retrieved row from sessionStorage: ${row}`);
-        } else {
-          errorDiv.style.display = 'block';
-          log('No valid parameters, showing error message');
-          return;
-        }
+      // Check if we have valid parameters
+      if (!id && (!row || isNaN(parseInt(row, 10)))) {
+        errorDiv.style.display = 'block';
+        log('No valid parameters, showing error message');
+        return;
       }
       
       log('Valid parameters found, will auto-redirect shortly');
