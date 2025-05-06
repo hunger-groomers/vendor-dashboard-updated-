@@ -1,278 +1,253 @@
+// ==================================
+// FIXED REDIRECT PAGE - Place this code in your GitHub Pages redirect HTML
+// ==================================
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hunger Groomers - Redirecting</title>
-    <style>
-        body {
-            font-family: 'Arial', sans-serif;
-            background-color: #f9f9f9;
-            margin: 0;
-            padding: 0;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            text-align: center;
-        }
-        .container {
-            background-color: white;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-            padding: 30px;
-            max-width: 500px;
-            width: 90%;
-        }
-        h1 {
-            color: #4285F4;
-            margin-bottom: 20px;
-        }
-        #loadingDiv {
-            margin: 20px 0;
-        }
-        .spinner {
-            border: 4px solid rgba(0, 0, 0, 0.1);
-            border-radius: 50%;
-            border-top: 4px solid #4285F4;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 15px;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        #contentDiv {
-            margin-bottom: 20px;
-        }
-        #errorDiv {
-            color: #d32f2f;
-            padding: 10px;
-            border-radius: 4px;
-            background-color: #ffebee;
-            margin: 20px 0;
-            display: none;
-        }
-        .btn {
-            background-color: #4285F4;
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 16px;
-            transition: background-color 0.3s;
-        }
-        .btn:hover {
-            background-color: #3367d6;
-        }
-        #retryBtn {
-            background-color: #757575;
-            display: none;
-        }
-        #debug {
-            font-size: 10px;
-            color: #9e9e9e;
-            margin-top: 20px;
-            text-align: left;
-            max-height: 100px;
-            overflow: auto;
-            padding: 5px;
-            display: none;
-        }
-    </style>
+  <title>Redirecting to Dashboard...</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      padding: 20px;
+      line-height: 1.5;
+    }
+    #contentDiv {
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    #loadingDiv {
+      display: none;
+      margin: 30px auto;
+    }
+    .loader {
+      border: 5px solid #f3f3f3;
+      border-top: 5px solid #4285F4;
+      border-radius: 50%;
+      width: 50px;
+      height: 50px;
+      animation: spin 2s linear infinite;
+      margin: 0 auto;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    #errorDiv {
+      display: none;
+      color: #d93025;
+      margin: 20px auto;
+      padding: 15px;
+      border: 1px solid #fadde1;
+      background-color: #feeef0;
+      border-radius: 4px;
+    }
+    button {
+      background: #4285F4;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 4px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #3367d6;
+    }
+    #debugInfo {
+      font-size: 10px;
+      color: #999;
+      margin-top: 20px;
+      display: none;
+    }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Hunger Groomers</h1>
-        
-        <div id="contentDiv">
-            <p>Please wait while we prepare your location sharing page...</p>
-            <button id="continueBtn" class="btn" onclick="performRedirect()">Continue</button>
-        </div>
-        
-        <div id="loadingDiv" style="display: none;">
-            <div class="spinner"></div>
-            <p id="loadingStatusDiv">Preparing your page...</p>
-        </div>
-        
-        <div id="errorDiv">
-            <p id="errorText">Something went wrong. Please try again.</p>
-        </div>
-        
-        <button id="retryBtn" class="btn" onclick="performRedirect()">Try Again</button>
-    </div>
+  <div id="contentDiv">
+    <h2>Hunger Groomers Location Sharing</h2>
+    <p>We need your location to find nearby tiffin centers.</p>
+    <p>Click the button below to continue.</p>
+    <button onclick="performRedirect()">Continue</button>
+    <div id="debugInfo"></div>
+  </div>
+  
+  <div id="loadingDiv">
+    <div class="loader"></div>
+    <p id="loadingStatusDiv">Processing your request...</p>
+  </div>
+  
+  <div id="errorDiv">
+    <h3>Oops! Something went wrong</h3>
+    <p id="errorMessage">There was a problem processing your request.</p>
+    <button id="retryBtn" onclick="performRedirect()">Try Again</button>
+    <p>If the problem persists, please contact support.</p>
+  </div>
+
+  <script>
+    // Set your web app URL here (must match exactly with Apps Script)
+    const webAppUrl = "https://script.google.com/macros/s/AKfycbzSIPn3BvDgsmcB3vtIs7j1rpK5eyaC8HFG9-D9cK_KToc6_PfcGP5_AAulCdoAROow/exec";
     
-    <div id="debug"></div>
+    // Debug mode - set to false in production
+    const DEBUG_MODE = true;
     
-    <script>
-        // Configure these values - should match your Apps Script settings
-        const webAppUrl = "https://script.google.com/macros/s/AKfycbzMCHkvKgtlyiCujVrcScpBO7P_sEM2zFoKLlMy747hO8Gp5uNEBSnrByNrD-R3U4TH/exec";
+    // Element references
+    const contentDiv = document.getElementById('contentDiv');
+    const loadingDiv = document.getElementById('loadingDiv');
+    const retryBtn = document.getElementById('retryBtn');
+    const errorDiv = document.getElementById('errorDiv');
+    const loadingStatusDiv = document.getElementById('loadingStatusDiv');
+    const debugInfoDiv = document.getElementById('debugInfo');
+    
+    // Function to log if debug mode is on
+    function log(message) {
+      if (DEBUG_MODE) {
+        console.log(message);
         
-        // Debug mode for development
-        const isDebugMode = false;
+        // Also show in the UI for easy debugging
+        debugInfoDiv.style.display = 'block';
+        debugInfoDiv.innerHTML += message + '<br>';
+      }
+    }
+    
+    // Function to show errors
+    function showError(message) {
+      errorDiv.style.display = 'block';
+      document.getElementById('errorMessage').textContent = message;
+      loadingDiv.style.display = 'none';
+      contentDiv.style.display = 'none';
+      retryBtn.style.display = 'block';
+      log('ERROR: ' + message);
+    }
+    
+    // Function to extract URL parameters
+    function getParameterValue(param) {
+      const urlParams = new URLSearchParams(window.location.search);
+      return urlParams.get(param);
+    }
+    
+    // Function to get clean ID parameter with multiple decode attempts
+    function getCleanIdParameter() {
+      let id = getParameterValue('id');
+      
+      // If no id found, try using row parameter as fallback
+      if (!id) {
+        const row = getParameterValue('row');
+        if (row && !isNaN(parseInt(row, 10))) {
+          log(`Using row=${row} as fallback parameter`);
+          return row; // Just pass the row number directly
+        }
+        return null;
+      }
+      
+      // Log the original ID for debugging
+      log(`Original ID value: ${id}`);
+      
+      // Sanitize id parameter - handle potential double encoding issues
+      try {
+        // Check if the ID appears to be URI encoded multiple times
+        let decodedId = id;
+        let decodingAttempts = 0;
         
-        // DOM elements
-        const loadingDiv = document.getElementById('loadingDiv');
-        const contentDiv = document.getElementById('contentDiv');
-        const errorDiv = document.getElementById('errorDiv');
-        const errorText = document.getElementById('errorText');
-        const retryBtn = document.getElementById('retryBtn');
-        const loadingStatusDiv = document.getElementById('loadingStatusDiv');
-        const debugDiv = document.getElementById('debug');
-        
-        // Show debug panel if in debug mode
-        if (isDebugMode) {
-            debugDiv.style.display = 'block';
+        // Track each decoding iteration
+        while (decodedId.includes('%') && decodingAttempts < 5) {
+          const previousValue = decodedId;
+          try {
+            decodedId = decodeURIComponent(decodedId);
+            log(`Decoded ID iteration ${decodingAttempts+1}: ${decodedId}`);
+            
+            // If decoding didn't change anything, stop trying
+            if (previousValue === decodedId) break;
+            
+            decodingAttempts++;
+          } catch (e) {
+            log(`Decoding error: ${e.message}`);
+            break;
+          }
         }
         
-        // Log function that writes to debug div in debug mode
-        function log(message) {
-            if (isDebugMode) {
-                const timestamp = new Date().toLocaleTimeString();
-                debugDiv.innerHTML += `[${timestamp}] ${message}<br>`;
-                debugDiv.scrollTop = debugDiv.scrollHeight;
-                console.log(message);
-            }
+        // Make sure we don't have any unwanted quotes
+        decodedId = decodedId.trim();
+        if ((decodedId.startsWith('"') && decodedId.endsWith('"')) || 
+            (decodedId.startsWith("'") && decodedId.endsWith("'"))) {
+          decodedId = decodedId.substring(1, decodedId.length - 1);
+          log(`Removed quotes from ID: ${decodedId}`);
         }
         
-        // Error display function
-        function showError(message) {
-            loadingDiv.style.display = 'none';
-            errorDiv.style.display = 'block';
-            errorText.textContent = message;
-            retryBtn.style.display = 'block';
-            log(`ERROR: ${message}`);
+        log(`Final cleaned ID: ${decodedId}`);
+        return decodedId;
+      } catch (e) {
+        log(`Error sanitizing ID parameter: ${e.message}`);
+        return id; // Return the original if we can't sanitize
+      }
+    }
+    
+    // The main redirect function
+    function performRedirect() {
+      // Hide content, show loading
+      contentDiv.style.display = 'none';
+      loadingDiv.style.display = 'block';
+      retryBtn.style.display = 'none';
+      errorDiv.style.display = 'none';
+      
+      // Get the clean ID parameter
+      const cleanId = getCleanIdParameter();
+      
+      if (!cleanId) {
+        showError('Missing or invalid ID parameter. This link may have expired.');
+        log("ERROR: No valid ID parameter found");
+        return;
+      }
+      
+      // Save to sessionStorage as backup
+      sessionStorage.setItem('lastid', cleanId);
+      
+      // Build the target URL - properly encode the ID for URL usage
+      const encodedId = encodeURIComponent(cleanId);
+      const targetUrl = `${webAppUrl}?id=${encodedId}`;
+      
+      log(`Final ID being passed: ${cleanId}`);
+      log(`Encoded ID for URL: ${encodedId}`);
+      log(`Redirecting to: ${targetUrl}`);
+      loadingStatusDiv.textContent = 'Redirecting to your dashboard...';
+      
+      // Verify URL format before redirecting
+      try {
+        new URL(targetUrl);
+      } catch (e) {
+        showError(`Invalid URL format: ${e.message}`);
+        log(`ERROR: Invalid URL format: ${e.message}`);
+        return;
+      }
+      
+      // Perform the redirect after a short delay
+      setTimeout(() => {
+        try {
+          window.location.href = targetUrl;
+        } catch (e) {
+          showError(`Redirect failed: ${e.message}`);
+          log(`ERROR: Redirect failed: ${e.message}`);
         }
-        
-        // Get clean parameter value, handling URL encoding issues
-        function getParameterValue(paramName) {
-            const urlParams = new URLSearchParams(window.location.search);
-            const value = urlParams.get(paramName);
-            
-            if (value) {
-                log(`Found raw ${paramName} parameter: ${value}`);
-                return value;
-            }
-            
-            log(`No ${paramName} parameter found`);
-            return null;
-        }
-        
-        // Get a clean ID parameter - handles potential encoding issues
-        function getCleanIdParameter() {
-            let id = getParameterValue('id');
-            
-            // If no id found, try using row parameter as fallback
-            if (!id) {
-                const row = getParameterValue('row');
-                if (row && !isNaN(parseInt(row, 10))) {
-                    log(`Using row=${row} as fallback parameter`);
-                    return row; // Just pass the row number directly
-                }
-                return null;
-            }
-            
-            // Log the original ID for debugging
-            log(`Original ID value: ${id}`);
-            
-            // Sanitize id parameter - handle potential double encoding issues
-            try {
-                // Check if the ID appears to be URI encoded multiple times
-                let decodedId = id;
-                let decodingAttempts = 0;
-                
-                // Track each decoding iteration
-                while (decodedId.includes('%') && decodingAttempts < 5) {
-                    const previousValue = decodedId;
-                    try {
-                        decodedId = decodeURIComponent(decodedId);
-                        log(`Decoded ID iteration ${decodingAttempts+1}: ${decodedId}`);
-                        
-                        // If decoding didn't change anything, stop trying
-                        if (previousValue === decodedId) break;
-                        
-                        decodingAttempts++;
-                    } catch (e) {
-                        log(`Decoding error: ${e.message}`);
-                        break;
-                    }
-                }
-                
-                // Make sure we don't have any unwanted quotes
-                decodedId = decodedId.trim();
-                if ((decodedId.startsWith('"') && decodedId.endsWith('"')) || 
-                    (decodedId.startsWith("'") && decodedId.endsWith("'"))) {
-                    decodedId = decodedId.substring(1, decodedId.length - 1);
-                    log(`Removed quotes from ID: ${decodedId}`);
-                }
-                
-                log(`Final cleaned ID: ${decodedId}`);
-                return decodedId;
-            } catch (e) {
-                log(`Error sanitizing ID parameter: ${e.message}`);
-                return id; // Return the original if we can't sanitize
-            }
-        }
-        
-        // Main redirect function
-        function performRedirect() {
-            // Hide content, show loading
-            contentDiv.style.display = 'none';
-            loadingDiv.style.display = 'block';
-            retryBtn.style.display = 'none';
-            errorDiv.style.display = 'none';
-            
-            // Get the clean ID parameter
-            const cleanId = getCleanIdParameter();
-            
-            if (!cleanId) {
-                showError('Missing or invalid ID parameter. This link may have expired.');
-                log("ERROR: No valid ID parameter found");
-                return;
-            }
-            
-            // Save to sessionStorage as backup
-            sessionStorage.setItem('lastid', cleanId);
-            
-            // Build the target URL - properly encode the ID for URL usage
-            const encodedId = encodeURIComponent(cleanId);
-            const targetUrl = `${webAppUrl}?id=${encodedId}`;
-            
-            log(`Final ID being passed: ${cleanId}`);
-            log(`Encoded ID for URL: ${encodedId}`);
-            log(`Redirecting to: ${targetUrl}`);
-            loadingStatusDiv.textContent = 'Redirecting to your dashboard...';
-            
-            // Verify URL format before redirecting
-            try {
-                new URL(targetUrl);
-            } catch (e) {
-                showError(`Invalid URL format: ${e.message}`);
-                log(`ERROR: Invalid URL format: ${e.message}`);
-                return;
-            }
-            
-            // Perform the redirect after a short delay
-            setTimeout(() => {
-                try {
-                    window.location.href = targetUrl;
-                } catch (e) {
-                    showError(`Redirect failed: ${e.message}`);
-                    log(`ERROR: Redirect failed: ${e.message}`);
-                }
-            }, 1000);
-        }
-        
-        // Auto-start redirect if in auto mode
-        const autoMode = getParameterValue('auto');
-        if (autoMode === 'true') {
-            log("Auto mode detected, performing redirect automatically");
-            document.addEventListener('DOMContentLoaded', performRedirect);
-        }
-    </script>
+      }, 1000);
+    }
+    
+    // Auto-execute when page loads (optional)
+    window.onload = function() {
+      // Check for debug parameter to show debug info
+      if (getParameterValue('debug') === 'true') {
+        DEBUG_MODE = true;
+        debugInfoDiv.style.display = 'block';
+      }
+      
+      log('Page loaded at: ' + new Date().toISOString());
+      log('URL: ' + window.location.href);
+      
+      // Uncomment to auto-redirect immediately
+      // performRedirect();
+    };
+  </script>
 </body>
 </html>
