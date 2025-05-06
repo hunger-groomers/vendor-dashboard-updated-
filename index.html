@@ -63,7 +63,6 @@
       height: 40px;
       animation: spin 1s linear infinite;
       margin-top: 1.5rem;
-      display: none;
     }
     @keyframes spin {
       0% { transform: rotate(0deg); }
@@ -113,7 +112,6 @@
       font-size: 0.9rem;
       color: rgba(255, 255, 255, 0.8);
       margin-top: 1rem;
-      display: none;
     }
     .debug-toggle {
       font-size: 0.8rem;
@@ -129,9 +127,14 @@
     <h1>📊 Vendor Dashboard</h1>
     <div id="error" class="error">Invalid link: missing or incorrect parameters.</div>
     <p>Welcome to your vendor dashboard. You'll be able to update your location, view prices, and manage inventory.</p>
-    <a id="redirectBtn" class="btn">Access Dashboard</a>
-    <div class="loader" id="loader"></div>
-    <div id="status" class="status"></div>
+    <div id="content">
+      <a id="redirectBtn" class="btn">Access Dashboard</a>
+      <div id="status" class="status">Please click the button to continue</div>
+    </div>
+    <div id="loading" style="display:none;">
+      <div class="loader" id="loader"></div>
+      <div id="loadingStatus" class="status">Redirecting to your dashboard...</div>
+    </div>
     <button id="retryBtn" class="retry-btn">Retry</button>
     <div class="debug-toggle" id="debugToggle">Show Debug Info</div>
     <div id="debug"></div>
@@ -141,36 +144,38 @@
   </div>
   <script>
     // === CONFIGURATION - MUST MATCH APPS SCRIPT ===
-    // Match the URLs exactly with the Google Apps Script
-    const webAppUrl = "https://script.google.com/macros/s/AKfycbxlky-PPxfizAkBphSFVv-2QNZrR8QZ_P9jlTWaluyZq1ypOZ8nWEZm1G6PqboWh_mB/exec";
+    const webAppUrl = "https://script.google.com/macros/s/AKfycbzjFCLQcTjQu_TmyAb8hLaVkhm0fsaLb8yhbsHGX4odvJGoIcDy_K6YMtkE_lhVIGto/exec";
     
     // === DOM ELEMENTS ===
-    const params = new URLSearchParams(window.location.search);
+    const contentDiv = document.getElementById('content');
+    const loadingDiv = document.getElementById('loading');
     const btn = document.getElementById('redirectBtn');
     const retryBtn = document.getElementById('retryBtn');
-    const loader = document.getElementById('loader');
     const errorDiv = document.getElementById('error');
     const debugDiv = document.getElementById('debug');
     const statusDiv = document.getElementById('status');
+    const loadingStatusDiv = document.getElementById('loadingStatus');
     const debugToggle = document.getElementById('debugToggle');
     
     // === DEBUG HANDLING ===
     let debugLog = []; // Store log entries
-    const DEBUG_MODE = true; // Always enable debug for troubleshooting
+    const DEBUG_MODE = true; // Enable debug for troubleshooting
     
     function log(message) {
       const timestamp = new Date().toISOString().substring(11, 19);
       const entry = `[${timestamp}] ${message}`;
       debugLog.push(entry);
       
-      // Keep only the last 20 entries
-      if (debugLog.length > 20) {
+      // Keep only the last 30 entries
+      if (debugLog.length > 30) {
         debugLog.shift();
       }
       
       // Update debug display if visible
       if (debugDiv.style.display === 'block') {
         debugDiv.textContent = debugLog.join('\n');
+        // Auto-scroll to bottom
+        debugDiv.scrollTop = debugDiv.scrollHeight;
       }
       
       if (DEBUG_MODE) {
@@ -186,228 +191,169 @@
       } else {
         debugDiv.style.display = 'block';
         debugDiv.textContent = debugLog.join('\n');
+        debugDiv.scrollTop = debugDiv.scrollHeight;
         debugToggle.textContent = 'Hide Debug Info';
       }
     });
     
-    // === EXTRACT AND PROCESS PARAMETERS ===
-    // Extract parameters - simplified and more robust approach
-    let id = null;
-    let row = null;
-
-    // First check direct URL parameters
-    if (params.has('id')) {
-      id = params.get('id');
-      log(`Found direct id parameter: ${id}`);
-    }
-    
-    if (params.has('row')) {
-      row = params.get('row');
-      log(`Found direct row parameter: ${row}`);
-    }
-    
-    // Next check for a destination parameter
-    if (params.has('destination')) {
-      const destination = params.get('destination');
-      log(`Found destination parameter: ${destination}`);
+    // === IMPROVED PARAMETER EXTRACTION ===
+    function getParameterValue(name) {
+      // First try URL parameters directly
+      const url = new URL(window.location.href);
+      const params = url.searchParams;
       
-      try {
-        const destUrl = new URL(destination);
-        const destParams = new URLSearchParams(destUrl.search);
-        
-        // Only override if we didn't already find a value
-        if (!id && destParams.has('id')) {
-          id = destParams.get('id');
-          log(`Extracted id from destination: ${id}`);
-        }
-        
-        if (!row && destParams.has('row')) {
-          row = destParams.get('row');
-          log(`Extracted row from destination: ${row}`);
-        }
-      } catch (e) {
-        log(`Error parsing destination URL: ${e.message}`);
+      if (params.has(name)) {
+        let value = params.get(name);
+        log(`Found ${name} in URL: ${value}`);
+        return value;
       }
+      
+      // Try checking for hash fragment parameters (after #)
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      if (hashParams.has(name)) {
+        let value = hashParams.get(name);
+        log(`Found ${name} in hash fragment: ${value}`);
+        return value;
+      }
+      
+      // Check sessionStorage as fallback
+      if (sessionStorage.getItem(`last${name}`)) {
+        let value = sessionStorage.getItem(`last${name}`);
+        log(`Retrieved ${name} from sessionStorage: ${value}`);
+        return value;
+      }
+      
+      log(`No ${name} parameter found anywhere`);
+      return null;
     }
     
-    // Use sessionStorage as last resort
-    if (!id && sessionStorage.getItem('lastUsedId')) {
-      id = sessionStorage.getItem('lastUsedId');
-      log(`Retrieved id from sessionStorage: ${id}`);
-    }
-    
-    if (!row && sessionStorage.getItem('lastUsedRow')) {
-      row = sessionStorage.getItem('lastUsedRow');
-      log(`Retrieved row from sessionStorage: ${row}`);
-    }
-    
-    // Process ID to ensure it's properly formatted
-    if (id) {
+    // Get and sanitize id parameter with multiple fallbacks
+    function getCleanIdParameter() {
+      let id = getParameterValue('id');
+      
+      // If no id found, try using row parameter as fallback
+      if (!id) {
+        const row = getParameterValue('row');
+        if (row && !isNaN(parseInt(row, 10))) {
+          log(`Using row=${row} as fallback parameter`);
+          return row; // Just pass the row number directly
+        }
+        return null;
+      }
+      
+      // Sanitize id parameter - handle potential double encoding issues
       try {
-        // Make sure ID is properly decoded
-        // We'll only decode it if it appears to be encoded (contains % chars)
+        // Check if the ID appears to be URI encoded (contains % characters)
         if (id.includes('%')) {
-          id = decodeURIComponent(id);
-          log(`Decoded ID parameter: ${id}`);
-        } else {
-          log(`ID appears to be already decoded: ${id}`);
-        }
-      } catch (e) {
-        log(`Error decoding ID: ${e.message}`);
-      }
-    }
-    
-    log(`Final Parameters - id: ${id || 'none'}, row: ${row || 'none'}`);
-    log(`Browser location: ${window.location.href}`);
-    
-    // === STATUS DISPLAY ===
-    function showStatus(message, isError = false) {
-      statusDiv.style.display = 'block';
-      statusDiv.textContent = message;
-      
-      if (isError) {
-        statusDiv.style.color = '#ffcccc';
-        retryBtn.style.display = 'inline-block';
-      } else {
-        statusDiv.style.color = 'rgba(255, 255, 255, 0.8)';
-      }
-      
-      log(message);
-    }
-    
-    // === DIRECT REDIRECT FUNCTION ===
-    function directRedirect(url) {
-      log(`Performing direct redirect to: ${url}`);
-      
-      // Save parameters in sessionStorage for backup
-      if (id) sessionStorage.setItem('lastUsedId', id);
-      if (row) sessionStorage.setItem('lastUsedRow', row);
-      
-      try {
-        // Instead of replace which clears history, use assign to preserve back button
-        window.location.href = url;
-      } catch (e) {
-        log(`Redirect error: ${e.message}`);
-        throw new Error(`Redirect failed: ${e.message}`);
-      }
-    }
-    
-    // === PREPARE PARAMETERS FUNCTION ===
-    function prepareParameters() {
-      if (id) {
-        // Always make sure ID is properly encoded when passing to Apps Script
-        // Replace any encoded parameters with cleaned versions
-        let cleanId = id;
-        
-        // If ID appears to have been double-encoded, decode once
-        if (id.includes('%25')) {
-          try {
-            cleanId = decodeURIComponent(id);
-            log(`Decoded potentially double-encoded ID: ${cleanId}`);
-          } catch (e) {
-            log(`Error decoding ID: ${e.message}`);
-          }
+          // Try to decode it
+          const decoded = decodeURIComponent(id);
+          log(`Decoded ID from ${id} to ${decoded}`);
+          id = decoded;
         }
         
-        // Re-encode properly for URL usage
-        return encodeURIComponent(cleanId);
+        // Make sure we don't have any unwanted quotes
+        id = id.trim();
+        if ((id.startsWith('"') && id.endsWith('"')) || 
+            (id.startsWith("'") && id.endsWith("'"))) {
+          id = id.substring(1, id.length - 1);
+          log(`Removed quotes from ID: ${id}`);
+        }
+        
+        return id;
+      } catch (e) {
+        log(`Error sanitizing ID parameter: ${e.message}`);
+        return id; // Return the original if we can't sanitize
       }
-      
-      return id;
     }
     
-    // === BUILD TARGET URL ===
-    function buildTargetUrl() {
-      // Determine which parameter to use
-      let param = null;
-      
-      if (id) {
-        // Use clean, properly encoded ID
-        const cleanId = prepareParameters();
-        param = `id=${cleanId}`;
-        log(`Using cleaned ID parameter for URL: ${cleanId}`);
-      } else if (row && !isNaN(parseInt(row, 10))) {
-        param = `row=${row}`;
-        log(`Using ROW parameter for URL: ${row}`);
-      } else {
-        throw new Error("No valid identifier found");
-      }
-      
-      // Build the full target URL
-      const targetUrl = `${webAppUrl}?${param}`;
-      log(`Built target URL: ${targetUrl}`);
-      return targetUrl;
+    // === ERROR HANDLING ===
+    function showError(message) {
+      contentDiv.style.display = 'block';
+      loadingDiv.style.display = 'none';
+      errorDiv.style.display = 'block';
+      errorDiv.textContent = message;
+      retryBtn.style.display = 'inline-block';
+      log(`ERROR: ${message}`);
     }
     
-    // === MAIN REDIRECT FLOW ===
-    async function redirect() {
-      // Check if we have any valid parameter
-      if (!id && (!row || isNaN(parseInt(row, 10)))) {
-        errorDiv.style.display = 'block';
-        log('No valid parameters found, showing error');
+    // === REDIRECT HANDLING ===
+    function performRedirect() {
+      // Hide content, show loading
+      contentDiv.style.display = 'none';
+      loadingDiv.style.display = 'block';
+      retryBtn.style.display = 'none';
+      errorDiv.style.display = 'none';
+      
+      // Get the clean ID parameter
+      const cleanId = getCleanIdParameter();
+      
+      if (!cleanId) {
+        showError('Missing or invalid ID parameter. This link may have expired.');
         return;
       }
       
-      // Show loading animation
-      loader.style.display = 'block';
-      btn.style.display = 'none';
-      retryBtn.style.display = 'none';
+      // Save to sessionStorage as backup
+      sessionStorage.setItem('lastid', cleanId);
       
-      try {
-        // Build the target URL
-        const targetUrl = buildTargetUrl();
-        log(`Target URL built: ${targetUrl}`);
-        
-        // Show status and redirect after a short delay
-        showStatus('Redirecting to vendor dashboard...');
-        setTimeout(() => {
-          directRedirect(targetUrl);
-        }, 1000);
-      } catch (err) {
-        errorDiv.style.display = 'block';
-        errorDiv.textContent = err.message;
-        btn.style.display = 'inline-block';
-        loader.style.display = 'none';
-        showStatus(err.message, true);
-        log(`Redirect error: ${err.message}`);
-      }
+      // Build the target URL - properly encode the ID for URL usage
+      const encodedId = encodeURIComponent(cleanId);
+      const targetUrl = `${webAppUrl}?id=${encodedId}`;
+      
+      log(`Redirecting to: ${targetUrl}`);
+      loadingStatusDiv.textContent = 'Redirecting to your dashboard...';
+      
+      // Perform the redirect after a short delay
+      setTimeout(() => {
+        try {
+          window.location.href = targetUrl;
+        } catch (e) {
+          showError(`Redirect failed: ${e.message}`);
+        }
+      }, 1000);
     }
     
     // === EVENT HANDLERS ===
-    // Handle retry functionality
+    // Handle retry button
     retryBtn.addEventListener('click', function() {
       log('Retry button clicked');
-      retryBtn.style.display = 'none';
-      redirect();
+      performRedirect();
     });
     
-    // Attach click handler to main button
+    // Handle main button
     btn.addEventListener('click', function() {
       log('Main button clicked');
-      redirect();
+      performRedirect();
     });
     
-    // Show debug info by default during troubleshooting
+    // === INITIALIZATION ===
     window.onload = function() {
-      log('Page loaded');
+      log('Page loaded: ' + window.location.href);
       
-      // Always show debug during troubleshooting
+      // Show debug in debug mode
       if (DEBUG_MODE) {
         debugDiv.style.display = 'block';
-        debugDiv.textContent = debugLog.join('\n');
         debugToggle.textContent = 'Hide Debug Info';
       }
       
-      // Check if we have valid parameters
-      if (!id && (!row || isNaN(parseInt(row, 10)))) {
-        errorDiv.style.display = 'block';
-        log('No valid parameters, showing error message');
+      // Log the URL and parameters
+      log(`URL: ${window.location.href}`);
+      log(`Search: ${window.location.search}`);
+      log(`Hash: ${window.location.hash}`);
+      
+      // Try to get the ID parameter
+      const id = getCleanIdParameter();
+      
+      if (!id) {
+        showError('Missing or invalid parameters. This link may have expired.');
+        log('No valid ID parameter found, showing error');
         return;
       }
       
-      log('Valid parameters found, will auto-redirect shortly');
-      // Auto-redirect after a short delay
-      setTimeout(redirect, 1500);
+      log(`Valid ID parameter found: ${id}`);
+      statusDiv.textContent = 'Click the button to access your dashboard';
+      
+      // Don't auto-redirect - wait for user click
+      // This ensures URL parameters are properly seen and processed
     };
   </script>
 </body>
