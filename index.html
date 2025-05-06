@@ -120,6 +120,15 @@
       text-decoration: underline;
       cursor: pointer;
     }
+    .id-display {
+      background: rgba(0,0,0,0.2);
+      padding: 8px;
+      border-radius: 4px;
+      margin-top: 10px;
+      font-size: 0.8rem;
+      overflow-wrap: break-word;
+      display: none;
+    }
   </style>
 </head>
 <body>
@@ -128,6 +137,7 @@
     <div id="error" class="error">Invalid link: missing or incorrect parameters.</div>
     <p>Welcome to your vendor dashboard. You'll be able to update your location, view prices, and manage inventory.</p>
     <div id="content">
+      <div id="idDisplay" class="id-display"></div>
       <a id="redirectBtn" class="btn">Access Dashboard</a>
       <div id="status" class="status">Please click the button to continue</div>
     </div>
@@ -144,7 +154,7 @@
   </div>
   <script>
     // === CONFIGURATION - MUST MATCH APPS SCRIPT ===
-    const webAppUrl = "https://script.google.com/macros/s/AKfycbzjFCLQcTjQu_TmyAb8hLaVkhm0fsaLb8yhbsHGX4odvJGoIcDy_K6YMtkE_lhVIGto/exec";
+    const webAppUrl = "https://script.google.com/macros/s/AKfycbxL-70rMIkIGDgvWFVNR7HJ_Ktn3KIF3GO3Dfrk7qe0FdfG_JDWoQ3o3HgRB9-tjuy7/exec";
     
     // === DOM ELEMENTS ===
     const contentDiv = document.getElementById('content');
@@ -156,6 +166,7 @@
     const statusDiv = document.getElementById('status');
     const loadingStatusDiv = document.getElementById('loadingStatus');
     const debugToggle = document.getElementById('debugToggle');
+    const idDisplay = document.getElementById('idDisplay');
     
     // === DEBUG HANDLING ===
     let debugLog = []; // Store log entries
@@ -198,7 +209,7 @@
     
     // === IMPROVED PARAMETER EXTRACTION ===
     function getParameterValue(name) {
-      // First try URL parameters directly
+      // Try from URL parameters first
       const url = new URL(window.location.href);
       const params = url.searchParams;
       
@@ -208,7 +219,7 @@
         return value;
       }
       
-      // Try checking for hash fragment parameters (after #)
+      // Try hash fragment params
       const hashParams = new URLSearchParams(window.location.hash.substring(1));
       if (hashParams.has(name)) {
         let value = hashParams.get(name);
@@ -243,23 +254,24 @@
       
       // Sanitize id parameter - handle potential double encoding issues
       try {
-        // Check if the ID appears to be URI encoded (contains % characters)
-        if (id.includes('%')) {
-          // Try to decode it
-          const decoded = decodeURIComponent(id);
-          log(`Decoded ID from ${id} to ${decoded}`);
-          id = decoded;
+        // Check if the ID appears to be URI encoded multiple times
+        let decodedId = id;
+        while (decodedId.includes('%')) {
+          const newDecoded = decodeURIComponent(decodedId);
+          if (newDecoded === decodedId) break; // No more decoding possible
+          decodedId = newDecoded;
+          log(`Decoded ID iteratively: ${decodedId}`);
         }
         
         // Make sure we don't have any unwanted quotes
-        id = id.trim();
-        if ((id.startsWith('"') && id.endsWith('"')) || 
-            (id.startsWith("'") && id.endsWith("'"))) {
-          id = id.substring(1, id.length - 1);
-          log(`Removed quotes from ID: ${id}`);
+        decodedId = decodedId.trim();
+        if ((decodedId.startsWith('"') && decodedId.endsWith('"')) || 
+            (decodedId.startsWith("'") && decodedId.endsWith("'"))) {
+          decodedId = decodedId.substring(1, decodedId.length - 1);
+          log(`Removed quotes from ID: ${decodedId}`);
         }
         
-        return id;
+        return decodedId;
       } catch (e) {
         log(`Error sanitizing ID parameter: ${e.message}`);
         return id; // Return the original if we can't sanitize
@@ -296,9 +308,12 @@
       sessionStorage.setItem('lastid', cleanId);
       
       // Build the target URL - properly encode the ID for URL usage
+      // Important: Use encodeURIComponent only ONCE on the already clean ID
       const encodedId = encodeURIComponent(cleanId);
       const targetUrl = `${webAppUrl}?id=${encodedId}`;
       
+      log(`Final ID being passed: ${cleanId}`);
+      log(`Encoded ID for URL: ${encodedId}`);
       log(`Redirecting to: ${targetUrl}`);
       loadingStatusDiv.textContent = 'Redirecting to your dashboard...';
       
@@ -310,6 +325,15 @@
           showError(`Redirect failed: ${e.message}`);
         }
       }, 1000);
+    }
+    
+    // === DIRECT LINK OPTION ===
+    function generateDirectLink() {
+      const cleanId = getCleanIdParameter();
+      if (!cleanId) return null;
+      
+      const encodedId = encodeURIComponent(cleanId);
+      return `${webAppUrl}?id=${encodedId}`;
     }
     
     // === EVENT HANDLERS ===
@@ -352,8 +376,19 @@
       log(`Valid ID parameter found: ${id}`);
       statusDiv.textContent = 'Click the button to access your dashboard';
       
-      // Don't auto-redirect - wait for user click
-      // This ensures URL parameters are properly seen and processed
+      // Show the ID in debug mode
+      if (DEBUG_MODE) {
+        idDisplay.textContent = `ID: ${id}`;
+        idDisplay.style.display = 'block';
+        
+        // Also show direct link option
+        const directLink = generateDirectLink();
+        if (directLink) {
+          const linkElem = document.createElement('p');
+          linkElem.innerHTML = `<small>Direct link: <a href="${directLink}" style="color:#fff;">${directLink}</a></small>`;
+          idDisplay.appendChild(linkElem);
+        }
+      }
     };
   </script>
 </body>
