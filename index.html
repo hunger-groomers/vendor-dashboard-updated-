@@ -1,6 +1,3 @@
-// ==================================
-// FIXED REDIRECT PAGE - Place this code in your GitHub Pages redirect HTML
-// ==================================
 <!DOCTYPE html>
 <html>
 <head>
@@ -89,7 +86,7 @@
 
   <script>
     // Set your web app URL here (must match exactly with Apps Script)
-    const webAppUrl = "https://script.google.com/macros/s/AKfycbzdjSNRAq6_xSafqOqos-b5n3efJ1GzcD6xAaQymJNKkKgPv8uWNb493ESQYlBZl9w/exec";
+    const webAppUrl = "https://script.google.com/macros/s/AKfycbyFCzXQHWoFhNO8WRC1dJB9chJGzMfma81MQkK-L7Au788KcP45zb6rG4pjOXpLicEW/exec";
     
     // Debug mode - set to false in production
     const DEBUG_MODE = true;
@@ -123,66 +120,46 @@
       log('ERROR: ' + message);
     }
     
-    // Function to extract URL parameters
-    function getParameterValue(param) {
+    // Simplified function to get the ID parameter
+    function getIdParameter() {
       const urlParams = new URLSearchParams(window.location.search);
-      return urlParams.get(param);
-    }
-    
-    // Function to get clean ID parameter with multiple decode attempts
-    function getCleanIdParameter() {
-      let id = getParameterValue('id');
+      let id = urlParams.get('id');
+      const row = urlParams.get('row');
       
-      // If no id found, try using row parameter as fallback
+      // Log the original parameters
+      log(`Original ID: ${id}, Row: ${row}`);
+      
+      // Use row as fallback if id not present
+      if (!id && row) {
+        log(`Using row=${row} as fallback parameter`);
+        return row;
+      }
+      
+      // If no valid ID found
       if (!id) {
-        const row = getParameterValue('row');
-        if (row && !isNaN(parseInt(row, 10))) {
-          log(`Using row=${row} as fallback parameter`);
-          return row; // Just pass the row number directly
-        }
         return null;
       }
       
-      // Log the original ID for debugging
-      log(`Original ID value: ${id}`);
-      
-      // Sanitize id parameter - handle potential double encoding issues
+      // Simple single decode (avoid multiple decoding attempts)
       try {
-        // Check if the ID appears to be URI encoded multiple times
-        let decodedId = id;
-        let decodingAttempts = 0;
+        // Only decode once to avoid issues
+        id = decodeURIComponent(id);
+        log(`Decoded ID: ${id}`);
         
-        // Track each decoding iteration
-        while (decodedId.includes('%') && decodingAttempts < 5) {
-          const previousValue = decodedId;
-          try {
-            decodedId = decodeURIComponent(decodedId);
-            log(`Decoded ID iteration ${decodingAttempts+1}: ${decodedId}`);
-            
-            // If decoding didn't change anything, stop trying
-            if (previousValue === decodedId) break;
-            
-            decodingAttempts++;
-          } catch (e) {
-            log(`Decoding error: ${e.message}`);
-            break;
-          }
+        // Trim quotes if present
+        id = id.trim();
+        if ((id.startsWith('"') && id.endsWith('"')) || 
+            (id.startsWith("'") && id.endsWith("'"))) {
+          id = id.substring(1, id.length - 1);
+          log(`Removed quotes from ID: ${id}`);
         }
-        
-        // Make sure we don't have any unwanted quotes
-        decodedId = decodedId.trim();
-        if ((decodedId.startsWith('"') && decodedId.endsWith('"')) || 
-            (decodedId.startsWith("'") && decodedId.endsWith("'"))) {
-          decodedId = decodedId.substring(1, decodedId.length - 1);
-          log(`Removed quotes from ID: ${decodedId}`);
-        }
-        
-        log(`Final cleaned ID: ${decodedId}`);
-        return decodedId;
       } catch (e) {
-        log(`Error sanitizing ID parameter: ${e.message}`);
-        return id; // Return the original if we can't sanitize
+        log(`Decoding error: ${e.message}`);
+        // Fall back to original if decoding fails
       }
+      
+      log(`Final ID: ${id}`);
+      return id;
     }
     
     // The main redirect function
@@ -193,23 +170,23 @@
       retryBtn.style.display = 'none';
       errorDiv.style.display = 'none';
       
-      // Get the clean ID parameter
-      const cleanId = getCleanIdParameter();
+      // Get the ID parameter
+      const id = getIdParameter();
       
-      if (!cleanId) {
+      if (!id) {
         showError('Missing or invalid ID parameter. This link may have expired.');
         log("ERROR: No valid ID parameter found");
         return;
       }
       
       // Save to sessionStorage as backup
-      sessionStorage.setItem('lastid', cleanId);
+      sessionStorage.setItem('lastid', id);
       
       // Build the target URL - properly encode the ID for URL usage
-      const encodedId = encodeURIComponent(cleanId);
+      const encodedId = encodeURIComponent(id);
       const targetUrl = `${webAppUrl}?id=${encodedId}`;
       
-      log(`Final ID being passed: ${cleanId}`);
+      log(`Final ID being passed: ${id}`);
       log(`Encoded ID for URL: ${encodedId}`);
       log(`Redirecting to: ${targetUrl}`);
       loadingStatusDiv.textContent = 'Redirecting to your dashboard...';
@@ -223,21 +200,33 @@
         return;
       }
       
-      // Perform the redirect after a short delay
-      setTimeout(() => {
-        try {
+      // Include original parameters in the body for POST
+      const formData = new FormData();
+      formData.append('id', id);
+      
+      // Send the ID via POST to handle special characters better
+      fetch(targetUrl, {
+        method: 'POST',
+        body: formData
+      })
+      .then(response => {
+        if (response.redirected) {
+          window.location.href = response.url;
+        } else {
           window.location.href = targetUrl;
-        } catch (e) {
-          showError(`Redirect failed: ${e.message}`);
-          log(`ERROR: Redirect failed: ${e.message}`);
         }
-      }, 1000);
+      })
+      .catch(error => {
+        log(`Fetch error: ${error.message}`);
+        // Fall back to regular redirect
+        window.location.href = targetUrl;
+      });
     }
     
     // Auto-execute when page loads (optional)
     window.onload = function() {
       // Check for debug parameter to show debug info
-      if (getParameterValue('debug') === 'true') {
+      if (new URLSearchParams(window.location.search).get('debug') === 'true') {
         DEBUG_MODE = true;
         debugInfoDiv.style.display = 'block';
       }
