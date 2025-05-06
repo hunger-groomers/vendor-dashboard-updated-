@@ -142,7 +142,7 @@
   <script>
     // === CONFIGURATION - MUST MATCH APPS SCRIPT ===
     // Match the URLs exactly with the Google Apps Script
-    const webAppUrl = "https://script.google.com/macros/s/AKfycbzkM5bq2wfbt485FBaFiTE0GL5mmr5wSNA5b_dxA-_3kwUBJKZnNIy5N4PuzT9atglE/exec";
+    const webAppUrl = "https://script.google.com/macros/s/AKfycbxlky-PPxfizAkBphSFVv-2QNZrR8QZ_P9jlTWaluyZq1ypOZ8nWEZm1G6PqboWh_mB/exec";
     
     // === DOM ELEMENTS ===
     const params = new URLSearchParams(window.location.search);
@@ -292,15 +292,40 @@
       }
     }
     
+    // === PREPARE PARAMETERS FUNCTION ===
+    function prepareParameters() {
+      if (id) {
+        // Always make sure ID is properly encoded when passing to Apps Script
+        // Replace any encoded parameters with cleaned versions
+        let cleanId = id;
+        
+        // If ID appears to have been double-encoded, decode once
+        if (id.includes('%25')) {
+          try {
+            cleanId = decodeURIComponent(id);
+            log(`Decoded potentially double-encoded ID: ${cleanId}`);
+          } catch (e) {
+            log(`Error decoding ID: ${e.message}`);
+          }
+        }
+        
+        // Re-encode properly for URL usage
+        return encodeURIComponent(cleanId);
+      }
+      
+      return id;
+    }
+    
     // === BUILD TARGET URL ===
     function buildTargetUrl() {
       // Determine which parameter to use
       let param = null;
       
       if (id) {
-        // No double-encoding - use the raw ID which we've already handled
-        param = `id=${id}`;
-        log(`Using ID parameter for URL: ${id}`);
+        // Use clean, properly encoded ID
+        const cleanId = prepareParameters();
+        param = `id=${cleanId}`;
+        log(`Using cleaned ID parameter for URL: ${cleanId}`);
       } else if (row && !isNaN(parseInt(row, 10))) {
         param = `row=${row}`;
         log(`Using ROW parameter for URL: ${row}`);
@@ -308,7 +333,7 @@
         throw new Error("No valid identifier found");
       }
       
-      // Build the full target URL without additional encoding
+      // Build the full target URL
       const targetUrl = `${webAppUrl}?${param}`;
       log(`Built target URL: ${targetUrl}`);
       return targetUrl;
