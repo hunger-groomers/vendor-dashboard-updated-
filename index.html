@@ -59,6 +59,9 @@
       font-size: 10px;
       color: #999;
       margin-top: 20px;
+      text-align: left;
+      border: 1px solid #eee;
+      padding: 10px;
       display: none;
     }
   </style>
@@ -86,7 +89,7 @@
 
   <script>
     // Set your web app URL here (must match exactly with Apps Script)
-    const webAppUrl = "https://script.google.com/macros/s/AKfycbwW0zbXi1sqP__sVD2JcTQEm1f6Kr9ctyfEX4UY9m80Qu_Hi90kjgKjz-c_wyQkgflv/exec";
+    const webAppUrl = "https://script.google.com/macros/s/AKfycbyDX5GAfy5_9q1657STTlVK2nT1MTVVye_k6xq2f32UQFHeKagwWv-h8IdAAGSNoqmI/exec";
     
     // Debug mode - set to true for troubleshooting
     const DEBUG_MODE = true;
@@ -94,7 +97,6 @@
     // Element references
     const contentDiv = document.getElementById('contentDiv');
     const loadingDiv = document.getElementById('loadingDiv');
-    const retryBtn = document.getElementById('retryBtn');
     const errorDiv = document.getElementById('errorDiv');
     const loadingStatusDiv = document.getElementById('loadingStatusDiv');
     const debugInfoDiv = document.getElementById('debugInfo');
@@ -116,34 +118,35 @@
       document.getElementById('errorMessage').textContent = message;
       loadingDiv.style.display = 'none';
       contentDiv.style.display = 'none';
-      retryBtn.style.display = 'block';
       log('ERROR: ' + message);
     }
     
-    // Improved function to get the ID parameter
-    function getIdParameter() {
+    // Get query parameters from URL
+    function getQueryParam(name) {
       const urlParams = new URLSearchParams(window.location.search);
-      let id = urlParams.get('id');
-      const row = urlParams.get('row');
+      return urlParams.get(name);
+    }
+    
+    // Function to perform an HTTP POST instead of redirect
+    function postToWebApp(id) {
+      // Create a form element
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = webAppUrl;
+      form.target = '_self';
       
-      // Log the original parameters
-      log(`Original ID: ${id}, Row: ${row}`);
+      // Create hidden input for the ID
+      const idInput = document.createElement('input');
+      idInput.type = 'hidden';
+      idInput.name = 'id';
+      idInput.value = id;
       
-      // Use row as fallback if id not present
-      if (!id && row) {
-        log(`Using row=${row} as fallback parameter`);
-        return row;
-      }
+      // Append input to form
+      form.appendChild(idInput);
       
-      // If no valid ID found
-      if (!id) {
-        return null;
-      }
-      
-      // Keep the ID exactly as is - don't try to decode or modify it
-      // The Apps Script should handle any necessary decoding
-      log(`Final ID being used: ${id}`);
-      return id;
+      // Append form to body and submit
+      document.body.appendChild(form);
+      form.submit();
     }
     
     // The main redirect function - IMPROVED
@@ -151,50 +154,55 @@
       // Hide content, show loading
       contentDiv.style.display = 'none';
       loadingDiv.style.display = 'block';
-      retryBtn.style.display = 'none';
       errorDiv.style.display = 'none';
       
-      // Get the ID parameter
-      const id = getIdParameter();
+      // Get the ID parameter from URL
+      const id = getQueryParam('id');
       
       if (!id) {
-        showError('Missing or invalid ID parameter. This link may have expired.');
-        log("ERROR: No valid ID parameter found");
+        showError('Missing ID parameter. This link may be invalid or expired.');
+        log("ERROR: No ID parameter found in URL");
         return;
       }
       
-      // Save to sessionStorage as backup
-      sessionStorage.setItem('lastid', id);
+      // Save to localStorage as backup
+      localStorage.setItem('lastid', id);
       
-      // Build the target URL - pass ID exactly as is without re-encoding
-      const targetUrl = `${webAppUrl}?id=${id}`;
+      log(`ID from URL: ${id}`);
       
-      log(`ID being passed: ${id}`);
+      // Try multiple approaches to handle the ID parameter
+      
+      // APPROACH 1: Simple redirect with parameter as-is
+      const targetUrl = `${webAppUrl}?id=${encodeURIComponent(id)}`;
       log(`Redirecting to: ${targetUrl}`);
       loadingStatusDiv.textContent = 'Redirecting to your dashboard...';
       
-      // Verify URL format before redirecting
       try {
-        new URL(targetUrl);
+        // First attempt: direct navigation
+        window.location.href = targetUrl;
+        
+        // As a backup, after a short delay, try POST approach
+        setTimeout(function() {
+          log("Redirect may have failed, trying POST approach...");
+          postToWebApp(id);
+        }, 3000);
+        
       } catch (e) {
-        showError(`Invalid URL format: ${e.message}`);
-        log(`ERROR: Invalid URL format: ${e.message}`);
-        return;
+        log(`ERROR during redirect: ${e.message}`);
+        showError(`Redirect failed: ${e.message}`);
       }
-      
-      // Simple redirect - no form post
-      window.location.href = targetUrl;
     }
     
     // Auto-execute when page loads
     window.onload = function() {
       // Check for debug parameter to show debug info
-      if (new URLSearchParams(window.location.search).get('debug') === 'true') {
+      if (getQueryParam('debug') === 'true') {
         debugInfoDiv.style.display = 'block';
       }
       
       log('Page loaded at: ' + new Date().toISOString());
       log('URL: ' + window.location.href);
+      log('ID parameter: ' + getQueryParam('id'));
       
       // Automatically redirect after a short delay
       setTimeout(performRedirect, 1500);
