@@ -86,9 +86,9 @@
 
   <script>
     // Set your web app URL here (must match exactly with Apps Script)
-    const webAppUrl = "https://script.google.com/macros/s/AKfycbyFCzXQHWoFhNO8WRC1dJB9chJGzMfma81MQkK-L7Au788KcP45zb6rG4pjOXpLicEW/exec";
+    const webAppUrl = "https://script.google.com/macros/s/AKfycbwW0zbXi1sqP__sVD2JcTQEm1f6Kr9ctyfEX4UY9m80Qu_Hi90kjgKjz-c_wyQkgflv/exec";
     
-    // Debug mode - set to false in production
+    // Debug mode - set to true for troubleshooting
     const DEBUG_MODE = true;
     
     // Element references
@@ -120,7 +120,7 @@
       log('ERROR: ' + message);
     }
     
-    // Simplified function to get the ID parameter
+    // Improved function to get the ID parameter
     function getIdParameter() {
       const urlParams = new URLSearchParams(window.location.search);
       let id = urlParams.get('id');
@@ -140,29 +140,13 @@
         return null;
       }
       
-      // Simple single decode (avoid multiple decoding attempts)
-      try {
-        // Only decode once to avoid issues
-        id = decodeURIComponent(id);
-        log(`Decoded ID: ${id}`);
-        
-        // Trim quotes if present
-        id = id.trim();
-        if ((id.startsWith('"') && id.endsWith('"')) || 
-            (id.startsWith("'") && id.endsWith("'"))) {
-          id = id.substring(1, id.length - 1);
-          log(`Removed quotes from ID: ${id}`);
-        }
-      } catch (e) {
-        log(`Decoding error: ${e.message}`);
-        // Fall back to original if decoding fails
-      }
-      
-      log(`Final ID: ${id}`);
+      // Keep the ID exactly as is - don't try to decode or modify it
+      // The Apps Script should handle any necessary decoding
+      log(`Final ID being used: ${id}`);
       return id;
     }
     
-    // The main redirect function
+    // The main redirect function - IMPROVED
     function performRedirect() {
       // Hide content, show loading
       contentDiv.style.display = 'none';
@@ -182,12 +166,10 @@
       // Save to sessionStorage as backup
       sessionStorage.setItem('lastid', id);
       
-      // Build the target URL - properly encode the ID for URL usage
-      const encodedId = encodeURIComponent(id);
-      const targetUrl = `${webAppUrl}?id=${encodedId}`;
+      // Build the target URL - pass ID exactly as is without re-encoding
+      const targetUrl = `${webAppUrl}?id=${id}`;
       
-      log(`Final ID being passed: ${id}`);
-      log(`Encoded ID for URL: ${encodedId}`);
+      log(`ID being passed: ${id}`);
       log(`Redirecting to: ${targetUrl}`);
       loadingStatusDiv.textContent = 'Redirecting to your dashboard...';
       
@@ -200,42 +182,22 @@
         return;
       }
       
-      // Include original parameters in the body for POST
-      const formData = new FormData();
-      formData.append('id', id);
-      
-      // Send the ID via POST to handle special characters better
-      fetch(targetUrl, {
-        method: 'POST',
-        body: formData
-      })
-      .then(response => {
-        if (response.redirected) {
-          window.location.href = response.url;
-        } else {
-          window.location.href = targetUrl;
-        }
-      })
-      .catch(error => {
-        log(`Fetch error: ${error.message}`);
-        // Fall back to regular redirect
-        window.location.href = targetUrl;
-      });
+      // Simple redirect - no form post
+      window.location.href = targetUrl;
     }
     
-    // Auto-execute when page loads (optional)
+    // Auto-execute when page loads
     window.onload = function() {
       // Check for debug parameter to show debug info
       if (new URLSearchParams(window.location.search).get('debug') === 'true') {
-        DEBUG_MODE = true;
         debugInfoDiv.style.display = 'block';
       }
       
       log('Page loaded at: ' + new Date().toISOString());
       log('URL: ' + window.location.href);
       
-      // Uncomment to auto-redirect immediately
-      // performRedirect();
+      // Automatically redirect after a short delay
+      setTimeout(performRedirect, 1500);
     };
   </script>
 </body>
