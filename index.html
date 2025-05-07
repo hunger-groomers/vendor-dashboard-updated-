@@ -89,7 +89,7 @@
 
   <script>
     // Set your web app URL here (must match exactly with Apps Script)
-    const webAppUrl = "https://script.google.com/macros/s/AKfycbzehauKCT_uOYA4T80NLpVdZSqar12zv_qN-UjS37r5nnIJ4j7SL1iDBrGjCadDHcA-/exec";
+    const webAppUrl = "https://script.google.com/macros/s/AKfycbyIMdITOH665hSW92lGoH4e0aFF11nDyV4hItvFmpH3twAjrs70R3kELe5Gmvufrvlj/exec";
     
     // Debug mode - set to true for troubleshooting
     const DEBUG_MODE = true;
@@ -127,25 +127,26 @@
       return urlParams.get(name);
     }
     
-    // Function to perform an HTTP POST instead of redirect
-    function postToWebApp(id) {
-      // Create a form element
+    // Function to create and submit an HTML form (more reliable than direct redirect)
+    function formRedirect(url, params) {
       const form = document.createElement('form');
-      form.method = 'POST';
-      form.action = webAppUrl;
-      form.target = '_self';
+      form.method = 'GET';  // Changed to GET to match what doGet expects
+      form.action = url;
       
-      // Create hidden input for the ID
-      const idInput = document.createElement('input');
-      idInput.type = 'hidden';
-      idInput.name = 'id';
-      idInput.value = id;
+      // Add each parameter as a hidden field
+      for (const key in params) {
+        if (params.hasOwnProperty(key) && params[key]) {
+          const hiddenField = document.createElement('input');
+          hiddenField.type = 'hidden';
+          hiddenField.name = key;
+          hiddenField.value = params[key];
+          form.appendChild(hiddenField);
+        }
+      }
       
-      // Append input to form
-      form.appendChild(idInput);
-      
-      // Append form to body and submit
+      // Append to body and submit
       document.body.appendChild(form);
+      log('Submitting form to: ' + url);
       form.submit();
     }
     
@@ -157,35 +158,57 @@
       errorDiv.style.display = 'none';
       
       // Get the ID parameter from URL
-      const id = getQueryParam('id');
+      let id = getQueryParam('id');
       
       if (!id) {
-        showError('Missing ID parameter. This link may be invalid or expired.');
-        log("ERROR: No ID parameter found in URL");
-        return;
+        // Try to restore from localStorage as a backup
+        id = localStorage.getItem('lastid');
+        if (!id) {
+          showError('Missing ID parameter. This link may be invalid or expired.');
+          log("ERROR: No ID parameter found in URL or localStorage");
+          return;
+        }
+        log("Restored ID from localStorage: " + id);
+      } else {
+        // Save to localStorage as backup
+        localStorage.setItem('lastid', id);
+        log(`ID from URL: ${id}`);
       }
       
-      // Save to localStorage as backup
-      localStorage.setItem('lastid', id);
+      // Also extract row number if it exists in the URL
+      const row = getQueryParam('row');
+      if (row) {
+        log(`Row from URL: ${row}`);
+      }
       
-      log(`ID from URL: ${id}`);
-      
-      // Try multiple approaches to handle the ID parameter
-      
-      // APPROACH 1: Simple redirect with parameter as-is
-      const targetUrl = `${webAppUrl}?id=${encodeURIComponent(id)}`;
-      log(`Redirecting to: ${targetUrl}`);
-      loadingStatusDiv.textContent = 'Redirecting to your dashboard...';
+      loadingStatusDiv.textContent = 'Redirecting to the location sharing page...';
       
       try {
-        // First attempt: direct navigation
-        window.location.href = targetUrl;
+        // Use form submission for more reliable parameter passing
+        const params = {
+          id: id,
+          autostart: 'true'  // Add autostart parameter to trigger location request
+        };
         
-        // As a backup, after a short delay, try POST approach
+        // Add row parameter if available
+        if (row) {
+          params.row = row;
+        }
+        
+        // Redirect using form submission (more reliable for parameter preservation)
+        formRedirect(webAppUrl, params);
+        
+        // Fallback after 5 seconds if form submission doesn't work
         setTimeout(function() {
-          log("Redirect may have failed, trying POST approach...");
-          postToWebApp(id);
-        }, 3000);
+          log("Form submission might have failed, trying direct navigation...");
+          // Build URL with parameters
+          let targetUrl = `${webAppUrl}?id=${encodeURIComponent(id)}`;
+          if (row) targetUrl += `&row=${encodeURIComponent(row)}`;
+          targetUrl += '&autostart=true';
+          
+          // Direct navigation as last resort
+          window.location.href = targetUrl;
+        }, 5000);
         
       } catch (e) {
         log(`ERROR during redirect: ${e.message}`);
@@ -196,13 +219,14 @@
     // Auto-execute when page loads
     window.onload = function() {
       // Check for debug parameter to show debug info
-      if (getQueryParam('debug') === 'true') {
+      if (getQueryParam('debug') === 'true' || DEBUG_MODE) {
         debugInfoDiv.style.display = 'block';
       }
       
       log('Page loaded at: ' + new Date().toISOString());
       log('URL: ' + window.location.href);
       log('ID parameter: ' + getQueryParam('id'));
+      log('Row parameter: ' + getQueryParam('row'));
       
       // Automatically redirect after a short delay
       setTimeout(performRedirect, 1500);
