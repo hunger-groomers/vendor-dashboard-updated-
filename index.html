@@ -3,12 +3,14 @@
 <head>
   <title>Redirecting to Dashboard...</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="UTF-8">
   <style>
     body {
       font-family: Arial, sans-serif;
       text-align: center;
       padding: 20px;
       line-height: 1.5;
+      background-color: #f9f9f9;
     }
     #contentDiv {
       max-width: 600px;
@@ -16,6 +18,7 @@
       padding: 20px;
       border-radius: 8px;
       box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      background-color: white;
     }
     #loadingDiv {
       display: none;
@@ -47,22 +50,79 @@
       background: #4285F4;
       color: white;
       border: none;
-      padding: 10px 20px;
+      padding: 12px 24px;
       border-radius: 4px;
-      font-size: 14px;
+      font-size: 16px;
       cursor: pointer;
+      margin: 15px 0;
+      transition: background 0.3s;
     }
     button:hover {
       background: #3367d6;
     }
     #debugInfo {
-      font-size: 10px;
-      color: #999;
+      font-size: 12px;
+      color: #666;
       margin-top: 20px;
       text-align: left;
       border: 1px solid #eee;
       padding: 10px;
+      border-radius: 4px;
+      background-color: #f9f9f9;
+      max-height: 200px;
+      overflow-y: auto;
       display: none;
+    }
+    .debug-title {
+      font-weight: bold;
+      margin-bottom: 5px;
+    }
+    .debug-btn {
+      background: #f1f1f1;
+      color: #333;
+      font-size: 12px;
+      padding: 5px 10px;
+      margin-top: 10px;
+    }
+    .progress-bar {
+      height: 4px;
+      width: 100%;
+      background-color: #e0e0e0;
+      margin: 20px 0;
+      position: relative;
+      overflow: hidden;
+    }
+    .progress-bar::after {
+      content: '';
+      position: absolute;
+      height: 100%;
+      width: 50%;
+      background-color: #4285F4;
+      animation: indeterminateAnimation 1.5s infinite linear;
+      transform-origin: 0% 50%;
+    }
+    @keyframes indeterminateAnimation {
+      0% {
+        transform:  translateX(0) scaleX(0);
+      }
+      40% {
+        transform:  translateX(0) scaleX(0.4);
+      }
+      100% {
+        transform:  translateX(100%) scaleX(0.5);
+      }
+    }
+    .success-icon {
+      color: #34A853;
+      font-size: 48px;
+      margin: 20px 0;
+    }
+    a {
+      color: #4285F4;
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
     }
   </style>
 </head>
@@ -70,8 +130,12 @@
   <div id="contentDiv">
     <h2>Hunger Groomers Location Sharing</h2>
     <p>We need your location to find nearby tiffin centers.</p>
+    <div class="progress-bar"></div>
     <p>Click the button below to continue.</p>
-    <button onclick="performRedirect()">Continue</button>
+    <button onclick="performRedirect()">Share My Location</button>
+    <div>
+      <button onclick="toggleDebug()" class="debug-btn">Toggle Debug Info</button>
+    </div>
     <div id="debugInfo"></div>
   </div>
   
@@ -83,13 +147,20 @@
   <div id="errorDiv">
     <h3>Oops! Something went wrong</h3>
     <p id="errorMessage">There was a problem processing your request.</p>
+    <div id="errorDetails" style="font-size: 14px; margin: 15px 0; text-align: left; background: #f9f9f9; padding: 10px; border-radius: 4px;"></div>
     <button id="retryBtn" onclick="performRedirect()">Try Again</button>
+    <button id="manualRedirectBtn" onclick="showManualRedirect()" style="background: #f1f1f1; color: #333;">Try Manual Redirect</button>
+    <div id="manualRedirectDiv" style="display: none; margin-top: 20px; text-align: left;">
+      <p>Copy this URL and open it in your browser:</p>
+      <input type="text" id="manualRedirectUrl" style="width: 100%; padding: 8px; margin: 5px 0; box-sizing: border-box;" readonly>
+      <button onclick="copyManualUrl()" style="background: #34A853; margin-top: 5px;">Copy URL</button>
+    </div>
     <p>If the problem persists, please contact support.</p>
   </div>
 
   <script>
     // Set your web app URL here (must match exactly with Apps Script)
-    const webAppUrl = "https://script.google.com/macros/s/AKfycbyIMdITOH665hSW92lGoH4e0aFF11nDyV4hItvFmpH3twAjrs70R3kELe5Gmvufrvlj/exec";
+    const webAppUrl = "https://script.google.com/macros/s/AKfycbyyoPyr7aj-BsRjIvOMO8nPKrPedOvLsQZWtfOGIReryBBmX3sDS4BnXUQRPtcbLYc6/exec";
     
     // Debug mode - set to true for troubleshooting
     const DEBUG_MODE = true;
@@ -100,25 +171,63 @@
     const errorDiv = document.getElementById('errorDiv');
     const loadingStatusDiv = document.getElementById('loadingStatusDiv');
     const debugInfoDiv = document.getElementById('debugInfo');
+    const errorDetailsDiv = document.getElementById('errorDetails');
     
-    // Function to log if debug mode is on
-    function log(message) {
-      if (DEBUG_MODE) {
-        console.log(message);
-        
-        // Also show in the UI for easy debugging
+    // Function to toggle debug info display
+    function toggleDebug() {
+      if (debugInfoDiv.style.display === 'block') {
+        debugInfoDiv.style.display = 'none';
+      } else {
         debugInfoDiv.style.display = 'block';
-        debugInfoDiv.innerHTML += message + '<br>';
       }
     }
     
+    // Function to log if debug mode is on
+    function log(message, type = 'info') {
+      const timestamp = new Date().toISOString();
+      const formattedMessage = `[${timestamp}] ${message}`;
+      
+      console.log(formattedMessage);
+      
+      // Also show in the UI for easy debugging
+      const className = type === 'error' ? 'color:red;' : type === 'success' ? 'color:green;' : '';
+      debugInfoDiv.innerHTML += `<div style="${className}">${formattedMessage}</div>`;
+    }
+    
     // Function to show errors
-    function showError(message) {
+    function showError(message, details = '') {
       errorDiv.style.display = 'block';
       document.getElementById('errorMessage').textContent = message;
+      
+      if (details) {
+        errorDetailsDiv.innerHTML = `<strong>Technical Details:</strong><br>${details}`;
+        errorDetailsDiv.style.display = 'block';
+      } else {
+        errorDetailsDiv.style.display = 'none';
+      }
+      
       loadingDiv.style.display = 'none';
       contentDiv.style.display = 'none';
-      log('ERROR: ' + message);
+      log('ERROR: ' + message, 'error');
+      
+      // Prepare manual redirect URL
+      const id = getQueryParam('id');
+      if (id) {
+        document.getElementById('manualRedirectUrl').value = `${webAppUrl}?id=${encodeURIComponent(id)}&autostart=true`;
+      }
+    }
+    
+    // Function to copy the manual URL
+    function copyManualUrl() {
+      const manualUrlInput = document.getElementById('manualRedirectUrl');
+      manualUrlInput.select();
+      document.execCommand('copy');
+      alert('URL copied to clipboard!');
+    }
+    
+    // Function to show manual redirect option
+    function showManualRedirect() {
+      document.getElementById('manualRedirectDiv').style.display = 'block';
     }
     
     // Get query parameters from URL
@@ -127,11 +236,42 @@
       return urlParams.get(name);
     }
     
+    // Store all URL params for debugging
+    function getAllUrlParams() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const params = {};
+      for (const [key, value] of urlParams.entries()) {
+        params[key] = value;
+      }
+      return params;
+    }
+    
+    // Universal encode function to handle different browsers
+    function safeEncode(value) {
+      if (!value) return '';
+      
+      // First try standard encoding
+      let encoded = encodeURIComponent(value);
+      
+      // For extra safety, replace problematic characters
+      encoded = encoded.replace(/\+/g, '%2B')  // + sign
+                       .replace(/\//g, '%2F')  // / slash
+                       .replace(/\?/g, '%3F')  // ? question mark
+                       .replace(/\#/g, '%23')  // # hash
+                       .replace(/\&/g, '%26')  // & ampersand
+                       .replace(/\=/g, '%3D'); // = equals
+      
+      return encoded;
+    }
+    
     // Function to create and submit an HTML form (more reliable than direct redirect)
     function formRedirect(url, params) {
+      log('Creating form for redirection');
+      
       const form = document.createElement('form');
       form.method = 'GET';  // Changed to GET to match what doGet expects
       form.action = url;
+      form.target = '_self';
       
       // Add each parameter as a hidden field
       for (const key in params) {
@@ -141,13 +281,46 @@
           hiddenField.name = key;
           hiddenField.value = params[key];
           form.appendChild(hiddenField);
+          log(`Added form field: ${key} = ${params[key]}`);
         }
       }
       
       // Append to body and submit
       document.body.appendChild(form);
       log('Submitting form to: ' + url);
-      form.submit();
+      
+      // Small delay to ensure browser processes form
+      setTimeout(() => {
+        try {
+          form.submit();
+          log('Form submitted successfully', 'success');
+        } catch (e) {
+          log(`Form submission error: ${e.message}`, 'error');
+          directRedirect(url, params);
+        }
+      }, 100);
+    }
+    
+    // Direct URL redirection method
+    function directRedirect(url, params) {
+      log('Performing direct URL redirection');
+      
+      // Build URL with parameters
+      let targetUrl = url;
+      const queryParams = [];
+      
+      for (const key in params) {
+        if (params.hasOwnProperty(key) && params[key]) {
+          queryParams.push(`${encodeURIComponent(key)}=${safeEncode(params[key])}`);
+        }
+      }
+      
+      if (queryParams.length) {
+        targetUrl += '?' + queryParams.join('&');
+      }
+      
+      log(`Navigating to: ${targetUrl}`);
+      window.location.href = targetUrl;
     }
     
     // The main redirect function - IMPROVED
@@ -160,18 +333,21 @@
       // Get the ID parameter from URL
       let id = getQueryParam('id');
       
+      log(`Starting redirection process with ID: ${id}`);
+      log(`All URL parameters: ${JSON.stringify(getAllUrlParams())}`);
+      
       if (!id) {
         // Try to restore from localStorage as a backup
-        id = localStorage.getItem('lastid');
+        id = localStorage.getItem('lastId');
         if (!id) {
-          showError('Missing ID parameter. This link may be invalid or expired.');
-          log("ERROR: No ID parameter found in URL or localStorage");
+          showError('Missing ID parameter. This link may be invalid or expired.', 
+                   'No ID parameter found in URL or localStorage. Please check the URL or request a new link.');
           return;
         }
-        log("Restored ID from localStorage: " + id);
+        log(`Restored ID from localStorage: ${id}`);
       } else {
         // Save to localStorage as backup
-        localStorage.setItem('lastid', id);
+        localStorage.setItem('lastId', id);
         log(`ID from URL: ${id}`);
       }
       
@@ -184,11 +360,34 @@
       loadingStatusDiv.textContent = 'Redirecting to the location sharing page...';
       
       try {
+        // Store original ID value
+        const originalId = id;
+        
+        // Try to normalize ID (best-effort cleanup)
+        try {
+          // If it appears to be encoded multiple times, try to decode it
+          while (id.includes('%25')) {
+            const decodedOnce = decodeURIComponent(id);
+            log(`Decoded ID: ${id} -> ${decodedOnce}`);
+            id = decodedOnce;
+          }
+        } catch (e) {
+          log(`Warning: Error during ID normalization: ${e.message}`);
+          // Continue with original ID
+          id = originalId;
+        }
+        
         // Use form submission for more reliable parameter passing
         const params = {
           id: id,
-          autostart: 'true'  // Add autostart parameter to trigger location request
+          autostart: 'true',  // Add autostart parameter to trigger location request
+          ts: new Date().getTime()  // Timestamp to avoid caching
         };
+        
+        // Add original ID for debugging
+        if (id !== originalId) {
+          params.original_id = originalId;
+        }
         
         // Add row parameter if available
         if (row) {
@@ -201,32 +400,35 @@
         // Fallback after 5 seconds if form submission doesn't work
         setTimeout(function() {
           log("Form submission might have failed, trying direct navigation...");
-          // Build URL with parameters
-          let targetUrl = `${webAppUrl}?id=${encodeURIComponent(id)}`;
-          if (row) targetUrl += `&row=${encodeURIComponent(row)}`;
-          targetUrl += '&autostart=true';
-          
-          // Direct navigation as last resort
-          window.location.href = targetUrl;
+          directRedirect(webAppUrl, params);
         }, 5000);
         
       } catch (e) {
-        log(`ERROR during redirect: ${e.message}`);
-        showError(`Redirect failed: ${e.message}`);
+        log(`ERROR during redirect: ${e.message}`, 'error');
+        showError(`Redirect failed: ${e.message}`,
+                 `Please try again or copy the manual redirect URL. Error details: ${e.message}`);
       }
     }
     
     // Auto-execute when page loads
     window.onload = function() {
-      // Check for debug parameter to show debug info
+      log('Page loaded at: ' + new Date().toISOString());
+      log('URL: ' + window.location.href);
+      log('User Agent: ' + navigator.userAgent);
+      log('ID parameter: ' + getQueryParam('id'));
+      log('Row parameter: ' + getQueryParam('row'));
+      
+      // Check for debug parameter
       if (getQueryParam('debug') === 'true' || DEBUG_MODE) {
         debugInfoDiv.style.display = 'block';
       }
       
-      log('Page loaded at: ' + new Date().toISOString());
-      log('URL: ' + window.location.href);
-      log('ID parameter: ' + getQueryParam('id'));
-      log('Row parameter: ' + getQueryParam('row'));
+      // If no ID parameter, show error immediately
+      if (!getQueryParam('id') && !localStorage.getItem('lastId')) {
+        showError('Missing ID parameter. This link may be invalid or expired.',
+                 'No ID parameter detected in the URL. Please check the link or request a new one.');
+        return;
+      }
       
       // Automatically redirect after a short delay
       setTimeout(performRedirect, 1500);
