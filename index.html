@@ -160,7 +160,7 @@
 
   <script>
     // Set your web app URL here (must match exactly with Apps Script)
-    const webAppUrl = "https://script.google.com/macros/s/AKfycbxwX4jDUTXJ6qeGdBchgACyLZW7YFAglpWcMTE36zqNmVDzKVTX5LJ_5bJZJLXOI4SI/exec";
+    const webAppUrl = "https://script.google.com/macros/s/AKfycbyF2AUJGYoqXUcIPtaNoCOY_lvb1eQtyc9FgyRGZe5iSslfHP7kwv23lTUyL9N2XTcR/exec";
     
     // Debug mode - set to true for troubleshooting
     const DEBUG_MODE = true;
@@ -288,65 +288,65 @@
       window.location.replace(targetUrl);
     }
     
-    // FIXED - The main redirect function
-    function performRedirect() {
-      // Hide content, show loading
-      contentDiv.style.display = 'none';
-      loadingDiv.style.display = 'block';
-      errorDiv.style.display = 'none';
-      
-      // Get the ID parameter from URL
-      let id = getQueryParam('id');
-      
-      log(`Starting redirection process with ID: ${id}`);
-      log(`All URL parameters: ${JSON.stringify(getAllUrlParams())}`);
-      
-      if (!id) {
-        // Try to restore from localStorage as a backup
-        id = localStorage.getItem('lastId');
-        if (!id) {
-          showError('Missing ID parameter. This link may be invalid or expired.', 
-                   'No ID parameter found in URL or localStorage. Please check the URL or request a new link.');
-          return;
-        }
-        log(`Restored ID from localStorage: ${id}`);
-      } else {
-        // Save to localStorage as backup
-        localStorage.setItem('lastId', id);
-        log(`ID from URL: ${id}`);
-      }
-      
-      // Also extract row number if it exists in the URL
-      const row = getQueryParam('row');
-      if (row) {
-        log(`Row from URL: ${row}`);
-      }
-      
-      loadingStatusDiv.textContent = 'Redirecting to the location sharing page...';
-      
-      try {
-        // FIXED: Send the ID without additional processing to avoid corruption
-        // Just use the ID as-is
-        const params = {
-          id: id,
-          autostart: 'true',
-          ts: new Date().getTime()  // Timestamp to avoid caching
-        };
-        
-        // Add row parameter if available
-        if (row) {
-          params.row = row;
-        }
-        
-        // FIXED: Directly redirect to the web app URL
-        directRedirect(webAppUrl, params);
-        
-      } catch (e) {
-        log(`ERROR during redirect: ${e.message}`, 'error');
-        showError(`Redirect failed: ${e.message}`,
-                 `Please try again or copy the manual redirect URL. Error details: ${e.message}`);
-      }
+    // === Replace the performRedirect function in your GitHub Pages file ===
+
+// FIXED - The main redirect function
+function performRedirect() {
+  // Hide content, show loading
+  contentDiv.style.display = 'none';
+  loadingDiv.style.display = 'block';
+  errorDiv.style.display = 'none';
+  
+  // Get the ID parameter from URL
+  let id = getQueryParam('id');
+  
+  log(`Starting redirection process with ID: ${id}`);
+  log(`All URL parameters: ${JSON.stringify(getAllUrlParams())}`);
+  
+  if (!id) {
+    // Try to restore from localStorage as a backup
+    id = localStorage.getItem('lastId');
+    if (!id) {
+      showError('Missing ID parameter. This link may be invalid or expired.', 
+               'No ID parameter found in URL or localStorage. Please check the URL or request a new link.');
+      return;
     }
+    log(`Restored ID from localStorage: ${id}`);
+  } else {
+    // Save to localStorage as backup
+    localStorage.setItem('lastId', id);
+    log(`ID from URL: ${id}`);
+  }
+  
+  // Also extract row number if it exists in the URL
+  const row = getQueryParam('row');
+  if (row) {
+    log(`Row from URL: ${row}`);
+  }
+  
+  loadingStatusDiv.textContent = 'Redirecting to the location sharing page...';
+  
+  try {
+    // IMPROVED: Pass the ID as-is without encoding it again (it's already encoded in the URL)
+    // Build the direct URL with parameters as query string
+    let redirectUrl = `${webAppUrl}?id=${id}`;
+    
+    // Add remaining parameters
+    if (row) redirectUrl += `&row=${row}`;
+    redirectUrl += `&autostart=true`;
+    redirectUrl += `&ts=${new Date().getTime()}`; // Cache buster
+    
+    log(`Final redirect URL: ${redirectUrl}`);
+    
+    // Use simpler direct redirection
+    window.location.replace(redirectUrl);
+    
+  } catch (e) {
+    log(`ERROR during redirect: ${e.message}`, 'error');
+    showError(`Redirect failed: ${e.message}`,
+             `Please try again or copy the manual redirect URL. Error details: ${e.message}`);
+  }
+}
     
     // Auto-execute when page loads
     window.onload = function() {
