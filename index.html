@@ -3,8 +3,7 @@
 <head>
   <title>Redirecting to Dashboard...</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta charset="UTF-8">
-  <style>
+  <meta charset="UTF-8">  <style>
     body {
       font-family: Arial, sans-serif;
       text-align: center;
@@ -173,7 +172,7 @@
 
   <script>
     // Set your web app URL here (must match exactly with Apps Script)
-    const webAppUrl = "https://script.google.com/macros/s/AKfycbyVwekn69qgHguNHLmjspG0YaaQd4TsNE2Wl18E60u04JQjYY5_3KMhyYQsz_Jo16gd/exec";
+    const webAppUrl = "https://script.google.com/macros/s/AKfycbzs2Ij2mqzBxIp-nd-XmtJFv75oZKCYkehQWbEq4Rv__ubCN5J-1VpHQ8kXH3O86lQP/exec";
     
     // Debug mode - set to true for troubleshooting
     const DEBUG_MODE = true;
@@ -249,9 +248,37 @@
       }, 2000);
     }
     
+    // Function to safely extract parameters from URL
+    function getUrlParameter(name) {
+      const urlParams = new URLSearchParams(window.location.search);
+      return urlParams.get(name);
+    }
+    
+    // Get ID from URL parameter safely
+    function getIdParameter() {
+      const id = getUrlParameter('id');
+      if (!id) {
+        log('No ID parameter found in URL', 'error');
+        return null;
+      }
+      log(`Found ID parameter: ${id}`);
+      
+      // We'll preserve the raw encoded ID without trying to decode it here
+      // Let the server side handle the decoding properly
+      return id;
+    }
+    
     // Function to build the redirect URL with parameters
     function buildRedirectUrl() {
       let url = new URL(webAppUrl);
+      
+      // Preserve the ID parameter exactly as it was received
+      const id = getIdParameter();
+      if (id) {
+        // Don't decode or encode the ID here - pass it as-is
+        url.searchParams.append('id', id);
+        log(`Adding ID parameter to redirect URL: ${id}`);
+      }
       
       // Add current timestamp to prevent caching
       url.searchParams.append('t', new Date().getTime());
@@ -263,20 +290,20 @@
         url.searchParams.append('acc', window.currentPosition.coords.accuracy);
       }
       
-      // Add any URL parameters from the current page
-      const currentParams = new URLSearchParams(window.location.search);
-      for (const [key, value] of currentParams) {
-        if (!url.searchParams.has(key)) {
-          url.searchParams.append(key, value);
-        }
-      }
-      
       return url.toString();
     }
     
     // Function to perform the redirect with geolocation
     function performRedirect() {
       log('Starting redirect process...');
+      
+      // First verify we have an ID parameter
+      const id = getIdParameter();
+      if (!id) {
+        showError('Missing required ID parameter. The link appears to be invalid or incomplete.', 
+                 'URL parameters: ' + window.location.search);
+        return;
+      }
       
       // Hide content and show loading spinner
       contentDiv.style.display = 'none';
@@ -306,8 +333,14 @@
           // Update the direct link anchor
           directLinkAnchor.href = redirectUrl;
           
-          // Log the redirect URL
-          log(`Redirecting to: ${redirectUrl}`);
+          // Log the redirect URL (but hide the full ID for security)
+          const logUrl = redirectUrl.replace(/id=([^&]+)/, (match, id) => {
+            if (id.length > 6) {
+              return `id=${id.substring(0, 6)}...`;
+            }
+            return match;
+          });
+          log(`Redirecting to: ${logUrl}`);
           
           // Perform the redirect
           setTimeout(() => {
@@ -346,8 +379,16 @@
     function initialize() {
       log('Page initialized', 'info');
       
+      // Check if we have required parameters
+      const id = getIdParameter();
+      if (!id) {
+        showError('Missing required ID parameter. The link appears to be invalid or incomplete.');
+        return;
+      }
+      log(`Valid ID parameter found: ${id.substring(0, 6)}...`);
+      
       // Set up the direct link
-      directLinkAnchor.href = webAppUrl;
+      directLinkAnchor.href = buildRedirectUrl();
       directLinkAnchor.addEventListener('click', function(e) {
         e.preventDefault();
         performRedirect();
