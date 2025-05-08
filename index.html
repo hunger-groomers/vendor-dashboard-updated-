@@ -124,6 +124,13 @@
     a:hover {
       text-decoration: underline;
     }
+    .direct-link {
+      margin-top: 20px;
+      padding: 10px;
+      background: #f5f5f5;
+      border-radius: 4px;
+      font-size: 14px;
+    }
   </style>
 </head>
 <body>
@@ -133,6 +140,12 @@
     <div class="progress-bar"></div>
     <p>Click the button below to continue.</p>
     <button onclick="performRedirect()">Share My Location</button>
+    
+    <!-- Added direct link option -->
+    <div class="direct-link">
+      <p>If the automatic redirect doesn't work, <a href="#" id="directLinkAnchor">click here</a> to open directly.</p>
+    </div>
+    
     <div>
       <button onclick="toggleDebug()" class="debug-btn">Toggle Debug Info</button>
     </div>
@@ -160,7 +173,7 @@
 
   <script>
     // Set your web app URL here (must match exactly with Apps Script)
-    const webAppUrl = "https://script.google.com/macros/s/AKfycbz3bxpv4iKD0tFmHVG1c4N2UjdArONIZDTfCSSibBren2X-9L460aGO0Y4-bbkaYHXt/exec";
+    const webAppUrl = "https://script.google.com/macros/s/AKfycbzoXY5z0lLO_pywoHb-dD8jH0qF8Qnb5GS3QcYM6qtSm-87pnreADqTQbEColK2iTsC/exec";
     
     // Debug mode - set to true for troubleshooting
     const DEBUG_MODE = true;
@@ -172,6 +185,9 @@
     const loadingStatusDiv = document.getElementById('loadingStatusDiv');
     const debugInfoDiv = document.getElementById('debugInfo');
     const errorDetailsDiv = document.getElementById('errorDetails');
+    const errorMessageElem = document.getElementById('errorMessage');
+    const directLinkAnchor = document.getElementById('directLinkAnchor');
+    const manualRedirectUrlInput = document.getElementById('manualRedirectUrl');
     
     // Function to toggle debug info display
     function toggleDebug() {
@@ -197,180 +213,156 @@
     // Function to show errors
     function showError(message, details = '') {
       errorDiv.style.display = 'block';
-      document.getElementById('errorMessage').textContent = message;
-      
-      if (details) {
-        errorDetailsDiv.innerHTML = `<strong>Technical Details:</strong><br>${details}`;
-        errorDetailsDiv.style.display = 'block';
-      } else {
-        errorDetailsDiv.style.display = 'none';
-      }
-      
-      loadingDiv.style.display = 'none';
       contentDiv.style.display = 'none';
-      log('ERROR: ' + message, 'error');
+      loadingDiv.style.display = 'none';
       
-      // Prepare manual redirect URL
-      const id = getQueryParam('id');
-      if (id) {
-        document.getElementById('manualRedirectUrl').value = `${webAppUrl}?id=${encodeURIComponent(id)}&autostart=true`;
+      errorMessageElem.textContent = message;
+      errorDetailsDiv.innerHTML = details ? `<strong>Technical details:</strong><br>${details}` : '';
+      
+      log(`Error: ${message}`, 'error');
+      if (details) {
+        log(`Error details: ${details}`, 'error');
       }
     }
     
-    // Function to copy the manual URL
-    function copyManualUrl() {
-      const manualUrlInput = document.getElementById('manualRedirectUrl');
-      manualUrlInput.select();
-      document.execCommand('copy');
-      alert('URL copied to clipboard!');
-    }
-    
-    // Function to show manual redirect option
+    // Function to show the manual redirect option
     function showManualRedirect() {
-      document.getElementById('manualRedirectDiv').style.display = 'block';
+      const manualRedirectDiv = document.getElementById('manualRedirectDiv');
+      manualRedirectDiv.style.display = 'block';
+      
+      // Create the manual URL with current parameters
+      let redirectUrl = buildRedirectUrl();
+      manualRedirectUrlInput.value = redirectUrl;
     }
     
-    // Get query parameters from URL
-    function getQueryParam(name) {
-      const urlParams = new URLSearchParams(window.location.search);
-      return urlParams.get(name);
+    // Function to copy the manual URL to clipboard
+    function copyManualUrl() {
+      manualRedirectUrlInput.select();
+      document.execCommand('copy');
+      
+      // Show feedback
+      const copyBtn = document.querySelector('#manualRedirectDiv button');
+      const originalText = copyBtn.textContent;
+      copyBtn.textContent = 'Copied!';
+      setTimeout(() => {
+        copyBtn.textContent = originalText;
+      }, 2000);
     }
     
-    // Store all URL params for debugging
-    function getAllUrlParams() {
-      const urlParams = new URLSearchParams(window.location.search);
-      const params = {};
-      for (const [key, value] of urlParams.entries()) {
-        params[key] = value;
+    // Function to build the redirect URL with parameters
+    function buildRedirectUrl() {
+      let url = new URL(webAppUrl);
+      
+      // Add current timestamp to prevent caching
+      url.searchParams.append('t', new Date().getTime());
+      
+      // If we have location, add it
+      if (window.currentPosition) {
+        url.searchParams.append('lat', window.currentPosition.coords.latitude);
+        url.searchParams.append('lng', window.currentPosition.coords.longitude);
+        url.searchParams.append('acc', window.currentPosition.coords.accuracy);
       }
-      return params;
-    }
-    
-    // Universal encode function to handle different browsers
-    function safeEncode(value) {
-      if (!value) return '';
       
-      // First try standard encoding
-      let encoded = encodeURIComponent(value);
-      
-      // For extra safety, replace problematic characters
-      encoded = encoded.replace(/\+/g, '%2B')  // + sign
-                       .replace(/\//g, '%2F')  // / slash
-                       .replace(/\?/g, '%3F')  // ? question mark
-                       .replace(/\#/g, '%23')  // # hash
-                       .replace(/\&/g, '%26')  // & ampersand
-                       .replace(/\=/g, '%3D'); // = equals
-      
-      return encoded;
-    }
-    
-    // FIXED - Direct URL redirection method
-    function directRedirect(url, params) {
-      log('Performing direct URL redirection');
-      
-      // Build URL with parameters
-      let targetUrl = url;
-      const queryParams = [];
-      
-      for (const key in params) {
-        if (params.hasOwnProperty(key) && params[key]) {
-          queryParams.push(`${encodeURIComponent(key)}=${safeEncode(params[key])}`);
+      // Add any URL parameters from the current page
+      const currentParams = new URLSearchParams(window.location.search);
+      for (const [key, value] of currentParams) {
+        if (!url.searchParams.has(key)) {
+          url.searchParams.append(key, value);
         }
       }
       
-      if (queryParams.length) {
-        targetUrl += '?' + queryParams.join('&');
-      }
-      
-      log(`Navigating to: ${targetUrl}`);
-      
-      // IMPORTANT: Use location.replace instead of location.href for better redirect
-      window.location.replace(targetUrl);
+      return url.toString();
     }
     
-    // === Replace the performRedirect function in your GitHub Pages file ===
-
-// FIXED - The main redirect function
-function performRedirect() {
-  // Hide content, show loading
-  contentDiv.style.display = 'none';
-  loadingDiv.style.display = 'block';
-  errorDiv.style.display = 'none';
-  
-  // Get the ID parameter from URL
-  let id = getQueryParam('id');
-  
-  log(`Starting redirection process with ID: ${id}`);
-  log(`All URL parameters: ${JSON.stringify(getAllUrlParams())}`);
-  
-  if (!id) {
-    // Try to restore from localStorage as a backup
-    id = localStorage.getItem('lastId');
-    if (!id) {
-      showError('Missing ID parameter. This link may be invalid or expired.', 
-               'No ID parameter found in URL or localStorage. Please check the URL or request a new link.');
-      return;
-    }
-    log(`Restored ID from localStorage: ${id}`);
-  } else {
-    // Save to localStorage as backup
-    localStorage.setItem('lastId', id);
-    log(`ID from URL: ${id}`);
-  }
-  
-  // Also extract row number if it exists in the URL
-  const row = getQueryParam('row');
-  if (row) {
-    log(`Row from URL: ${row}`);
-  }
-  
-  loadingStatusDiv.textContent = 'Redirecting to the location sharing page...';
-  
-  try {
-    // IMPROVED: Pass the ID as-is without encoding it again (it's already encoded in the URL)
-    // Build the direct URL with parameters as query string
-    let redirectUrl = `${webAppUrl}?id=${id}`;
-    
-    // Add remaining parameters
-    if (row) redirectUrl += `&row=${row}`;
-    redirectUrl += `&autostart=true`;
-    redirectUrl += `&ts=${new Date().getTime()}`; // Cache buster
-    
-    log(`Final redirect URL: ${redirectUrl}`);
-    
-    // Use simpler direct redirection
-    window.location.replace(redirectUrl);
-    
-  } catch (e) {
-    log(`ERROR during redirect: ${e.message}`, 'error');
-    showError(`Redirect failed: ${e.message}`,
-             `Please try again or copy the manual redirect URL. Error details: ${e.message}`);
-  }
-}
-    
-    // Auto-execute when page loads
-    window.onload = function() {
-      log('Page loaded at: ' + new Date().toISOString());
-      log('URL: ' + window.location.href);
-      log('User Agent: ' + navigator.userAgent);
-      log('ID parameter: ' + getQueryParam('id'));
-      log('Row parameter: ' + getQueryParam('row'));
+    // Function to perform the redirect with geolocation
+    function performRedirect() {
+      log('Starting redirect process...');
       
-      // Check for debug parameter
-      if (getQueryParam('debug') === 'true' || DEBUG_MODE) {
-        debugInfoDiv.style.display = 'block';
-      }
+      // Hide content and show loading spinner
+      contentDiv.style.display = 'none';
+      errorDiv.style.display = 'none';
+      loadingDiv.style.display = 'block';
+      loadingStatusDiv.textContent = 'Getting your location...';
       
-      // If no ID parameter, show error immediately
-      if (!getQueryParam('id') && !localStorage.getItem('lastId')) {
-        showError('Missing ID parameter. This link may be invalid or expired.',
-                 'No ID parameter detected in the URL. Please check the link or request a new one.');
+      // Check if geolocation is available
+      if (!navigator.geolocation) {
+        showError('Geolocation is not supported by your browser. Please use a modern browser that supports location services.');
         return;
       }
       
-      // FIXED: Automatically redirect after a short delay - increased to 1 second to ensure page loads fully
-      setTimeout(performRedirect, 1000);
-    };
+      // Try to get the user's position
+      navigator.geolocation.getCurrentPosition(
+        // Success callback
+        function(position) {
+          log(`Successfully got location. Lat: ${position.coords.latitude}, Lng: ${position.coords.longitude}`, 'success');
+          loadingStatusDiv.textContent = 'Location acquired. Redirecting...';
+          
+          // Store the position for potential use in manual redirect
+          window.currentPosition = position;
+          
+          // Build the URL with the position data
+          let redirectUrl = buildRedirectUrl();
+          
+          // Update the direct link anchor
+          directLinkAnchor.href = redirectUrl;
+          
+          // Log the redirect URL
+          log(`Redirecting to: ${redirectUrl}`);
+          
+          // Perform the redirect
+          setTimeout(() => {
+            window.location.href = redirectUrl;
+          }, 1000);
+        },
+        // Error callback
+        function(error) {
+          let errorMsg = '';
+          switch(error.code) {
+            case error.PERMISSION_DENIED:
+              errorMsg = 'Location permission was denied. Please allow access to your location and try again.';
+              break;
+            case error.POSITION_UNAVAILABLE:
+              errorMsg = 'Location information is unavailable. Please check your device settings.';
+              break;
+            case error.TIMEOUT:
+              errorMsg = 'The request to get your location timed out. Please try again.';
+              break;
+            default:
+              errorMsg = 'An unknown error occurred while trying to get your location.';
+          }
+          
+          showError(errorMsg, `Error code: ${error.code}, Message: ${error.message}`);
+        },
+        // Options
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0
+        }
+      );
+    }
+    
+    // Function to handle any initial setup tasks
+    function initialize() {
+      log('Page initialized', 'info');
+      
+      // Set up the direct link
+      directLinkAnchor.href = webAppUrl;
+      directLinkAnchor.addEventListener('click', function(e) {
+        e.preventDefault();
+        performRedirect();
+      });
+      
+      // Check for URL parameters that might indicate we should auto-start
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.has('autostart') && urlParams.get('autostart') === 'true') {
+        log('Autostart parameter detected, initiating location request');
+        performRedirect();
+      }
+    }
+    
+    // Run initialization when the page loads
+    window.onload = initialize;
   </script>
 </body>
 </html>
