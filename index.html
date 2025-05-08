@@ -160,7 +160,7 @@
 
   <script>
     // Set your web app URL here (must match exactly with Apps Script)
-    const webAppUrl = "https://script.google.com/macros/s/AKfycbz9Xz7Uca2cTrRWWnFYBJnxwiDU5ZuPDyn9zZ54ka9rGq1H7AiM7A0DV-d5IPEvNvqf/exec";
+    const webAppUrl = "https://script.google.com/macros/s/AKfycbxwX4jDUTXJ6qeGdBchgACyLZW7YFAglpWcMTE36zqNmVDzKVTX5LJ_5bJZJLXOI4SI/exec";
     
     // Debug mode - set to true for troubleshooting
     const DEBUG_MODE = true;
@@ -264,44 +264,7 @@
       return encoded;
     }
     
-    // Function to create and submit an HTML form (more reliable than direct redirect)
-    function formRedirect(url, params) {
-      log('Creating form for redirection');
-      
-      const form = document.createElement('form');
-      form.method = 'GET';  // Changed to GET to match what doGet expects
-      form.action = url;
-      form.target = '_self';
-      
-      // Add each parameter as a hidden field
-      for (const key in params) {
-        if (params.hasOwnProperty(key) && params[key]) {
-          const hiddenField = document.createElement('input');
-          hiddenField.type = 'hidden';
-          hiddenField.name = key;
-          hiddenField.value = params[key];
-          form.appendChild(hiddenField);
-          log(`Added form field: ${key} = ${params[key]}`);
-        }
-      }
-      
-      // Append to body and submit
-      document.body.appendChild(form);
-      log('Submitting form to: ' + url);
-      
-      // Small delay to ensure browser processes form
-      setTimeout(() => {
-        try {
-          form.submit();
-          log('Form submitted successfully', 'success');
-        } catch (e) {
-          log(`Form submission error: ${e.message}`, 'error');
-          directRedirect(url, params);
-        }
-      }, 100);
-    }
-    
-    // Direct URL redirection method
+    // FIXED - Direct URL redirection method
     function directRedirect(url, params) {
       log('Performing direct URL redirection');
       
@@ -320,10 +283,12 @@
       }
       
       log(`Navigating to: ${targetUrl}`);
-      window.location.href = targetUrl;
+      
+      // IMPORTANT: Use location.replace instead of location.href for better redirect
+      window.location.replace(targetUrl);
     }
     
-    // The main redirect function - IMPROVED
+    // FIXED - The main redirect function
     function performRedirect() {
       // Hide content, show loading
       contentDiv.style.display = 'none';
@@ -360,48 +325,21 @@
       loadingStatusDiv.textContent = 'Redirecting to the location sharing page...';
       
       try {
-        // Store original ID value
-        const originalId = id;
-        
-        // Try to normalize ID (best-effort cleanup)
-        try {
-          // If it appears to be encoded multiple times, try to decode it
-          while (id.includes('%25')) {
-            const decodedOnce = decodeURIComponent(id);
-            log(`Decoded ID: ${id} -> ${decodedOnce}`);
-            id = decodedOnce;
-          }
-        } catch (e) {
-          log(`Warning: Error during ID normalization: ${e.message}`);
-          // Continue with original ID
-          id = originalId;
-        }
-        
-        // Use form submission for more reliable parameter passing
+        // FIXED: Send the ID without additional processing to avoid corruption
+        // Just use the ID as-is
         const params = {
           id: id,
-          autostart: 'true',  // Add autostart parameter to trigger location request
+          autostart: 'true',
           ts: new Date().getTime()  // Timestamp to avoid caching
         };
-        
-        // Add original ID for debugging
-        if (id !== originalId) {
-          params.original_id = originalId;
-        }
         
         // Add row parameter if available
         if (row) {
           params.row = row;
         }
         
-        // Redirect using form submission (more reliable for parameter preservation)
-        formRedirect(webAppUrl, params);
-        
-        // Fallback after 5 seconds if form submission doesn't work
-        setTimeout(function() {
-          log("Form submission might have failed, trying direct navigation...");
-          directRedirect(webAppUrl, params);
-        }, 5000);
+        // FIXED: Directly redirect to the web app URL
+        directRedirect(webAppUrl, params);
         
       } catch (e) {
         log(`ERROR during redirect: ${e.message}`, 'error');
@@ -430,8 +368,8 @@
         return;
       }
       
-      // Automatically redirect after a short delay
-      setTimeout(performRedirect, 1500);
+      // FIXED: Automatically redirect after a short delay - increased to 1 second to ensure page loads fully
+      setTimeout(performRedirect, 1000);
     };
   </script>
 </body>
