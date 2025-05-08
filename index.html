@@ -3,7 +3,8 @@
 <head>
   <title>Redirecting to Dashboard...</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta charset="UTF-8">  <style>
+  <meta charset="UTF-8">
+  <style>
     body {
       font-family: Arial, sans-serif;
       text-align: center;
@@ -172,7 +173,7 @@
 
   <script>
     // Set your web app URL here (must match exactly with Apps Script)
-    const webAppUrl = "https://script.google.com/macros/s/AKfycbzs2Ij2mqzBxIp-nd-XmtJFv75oZKCYkehQWbEq4Rv__ubCN5J-1VpHQ8kXH3O86lQP/exec";
+    const webAppUrl = "https://script.google.com/macros/s/AKfycbzzd--RlwVpe1PO-Jz7tFJPkFBq0Lr1QwKJVCXRfNYCRiGbNiGl_H7aVBLFZqPqx2Fx/exec";
     
     // Debug mode - set to true for troubleshooting
     const DEBUG_MODE = true;
@@ -263,8 +264,7 @@
       }
       log(`Found ID parameter: ${id}`);
       
-      // We'll preserve the raw encoded ID without trying to decode it here
-      // Let the server side handle the decoding properly
+      // FIX: Return the raw ID without any modification
       return id;
     }
     
@@ -272,22 +272,21 @@
     function buildRedirectUrl() {
       let url = new URL(webAppUrl);
       
-      // Preserve the ID parameter exactly as it was received
+      // FIX: Pass ID parameter exactly as-is without any encoding
       const id = getIdParameter();
       if (id) {
-        // Don't decode or encode the ID here - pass it as-is
-        url.searchParams.append('id', id);
+        url.searchParams.set('id', id);
         log(`Adding ID parameter to redirect URL: ${id}`);
       }
       
       // Add current timestamp to prevent caching
-      url.searchParams.append('t', new Date().getTime());
+      url.searchParams.set('t', new Date().getTime());
       
       // If we have location, add it
       if (window.currentPosition) {
-        url.searchParams.append('lat', window.currentPosition.coords.latitude);
-        url.searchParams.append('lng', window.currentPosition.coords.longitude);
-        url.searchParams.append('acc', window.currentPosition.coords.accuracy);
+        url.searchParams.set('lat', window.currentPosition.coords.latitude);
+        url.searchParams.set('lng', window.currentPosition.coords.longitude);
+        url.searchParams.set('acc', window.currentPosition.coords.accuracy);
       }
       
       return url.toString();
@@ -342,10 +341,36 @@
           });
           log(`Redirecting to: ${logUrl}`);
           
-          // Perform the redirect
-          setTimeout(() => {
-            window.location.href = redirectUrl;
-          }, 1000);
+          // FIX: Send data directly via fetch instead of redirect
+          fetch(redirectUrl, {
+            method: 'GET',
+            cache: 'no-cache',
+            headers: {
+              'Accept': 'text/html'
+            }
+          })
+          .then(response => {
+            if (response.ok) {
+              loadingStatusDiv.textContent = 'Location sent successfully!';
+              log('Location data sent successfully', 'success');
+              
+              // After successful fetch, redirect to the same URL
+              setTimeout(() => {
+                window.location.href = redirectUrl;
+              }, 1000);
+            } else {
+              throw new Error(`Server responded with status: ${response.status}`);
+            }
+          })
+          .catch(error => {
+            log(`Fetch error: ${error}`, 'error');
+            showError('Failed to send location data. Trying redirect method...');
+            
+            // Fallback to direct redirect if fetch fails
+            setTimeout(() => {
+              window.location.href = redirectUrl;
+            }, 1000);
+          });
         },
         // Error callback
         function(error) {
