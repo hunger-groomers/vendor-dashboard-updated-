@@ -1,775 +1,189 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Redirecting to Dashboard...</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Share Your Location</title>
   <style>
     body {
-      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #6b73ff 0%, #000dff 100%);
+      color: #fff;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
       text-align: center;
-      padding: 20px;
-      line-height: 1.5;
-      background-color: #f9f9f9;
     }
-    #contentDiv {
-      max-width: 600px;
-      margin: 0 auto;
-      padding: 20px;
-      border-radius: 8px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-      background-color: white;
+    .container {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      border-radius: 12px;
+      padding: 2rem;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+      max-width: 90%;
+      width: 500px;
     }
-    #loadingDiv {
-      display: none;
-      margin: 30px auto;
+    h1 {
+      font-size: 1.8rem;
+      margin-bottom: 1rem;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    p {
+      font-size: 1rem;
+      margin-bottom: 2rem;
+      opacity: 0.9;
+    }
+    .btn {
+      background: #ffca28;
+      color: #000;
+      padding: 12px 28px;
+      border: none;
+      border-radius: 50px;
+      cursor: pointer;
+      font-size: 1rem;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+      transition: background 0.3s, transform 0.2s;
+      text-decoration: none;
+      display: inline-block;
+      font-weight: 600;
+    }
+    .btn:hover {
+      background: #ffd54f;
+      transform: translateY(-2px);
     }
     .loader {
-      border: 5px solid #f3f3f3;
-      border-top: 5px solid #4285F4;
+      border: 4px solid rgba(255,255,255,0.3);
+      border-top: 4px solid #fff;
       border-radius: 50%;
-      width: 50px;
-      height: 50px;
-      animation: spin 2s linear infinite;
-      margin: 0 auto;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin-top: 1.5rem;
+      display: none;
     }
     @keyframes spin {
       0% { transform: rotate(0deg); }
       100% { transform: rotate(360deg); }
     }
-    #errorDiv {
-      display: none;
-      color: #d93025;
-      margin: 20px auto;
-      padding: 15px;
-      border: 1px solid #fadde1;
-      background-color: #feeef0;
-      border-radius: 4px;
+    .privacy-notice {
+      font-size: 0.8rem;
+      opacity: 0.7;
+      margin-top: 2rem;
+      padding-top: 1rem;
+      border-top: 1px solid rgba(255,255,255,0.2);
     }
-    button {
-      background: #4285F4;
-      color: white;
-      border: none;
-      padding: 12px 24px;
-      border-radius: 4px;
-      font-size: 16px;
-      cursor: pointer;
-      margin: 15px 0;
-      transition: background 0.3s;
-    }
-    button:hover {
-      background: #3367d6;
-    }
-    #debugInfo {
-      font-size: 12px;
-      color: #666;
-      margin-top: 20px;
-      text-align: left;
-      border: 1px solid #eee;
-      padding: 10px;
-      border-radius: 4px;
-      background-color: #f9f9f9;
-      max-height: 200px;
-      overflow-y: auto;
+    .error {
+      background: rgba(255, 59, 48, 0.2);
+      color: #fff;
+      padding: 1rem;
+      border-radius: 8px;
+      margin-bottom: 1.5rem;
       display: none;
     }
-    .debug-title {
-      font-weight: bold;
-      margin-bottom: 5px;
-    }
-    .debug-btn {
-      background: #f1f1f1;
-      color: #333;
-      font-size: 12px;
-      padding: 5px 10px;
-      margin-top: 10px;
-    }
-    .progress-bar {
-      height: 4px;
-      width: 100%;
-      background-color: #e0e0e0;
-      margin: 20px 0;
-      position: relative;
-      overflow: hidden;
-    }
-    .progress-bar::after {
-      content: '';
-      position: absolute;
-      height: 100%;
-      width: 50%;
-      background-color: #4285F4;
-      animation: indeterminateAnimation 1.5s infinite linear;
-      transform-origin: 0% 50%;
-    }
-    @keyframes indeterminateAnimation {
-      0% {
-        transform:  translateX(0) scaleX(0);
-      }
-      40% {
-        transform:  translateX(0) scaleX(0.4);
-      }
-      100% {
-        transform:  translateX(100%) scaleX(0.5);
-      }
-    }
-    .success-icon {
-      color: #34A853;
-      font-size: 48px;
-      margin: 20px 0;
-    }
-    a {
-      color: #4285F4;
-      text-decoration: none;
-    }
-    a:hover {
-      text-decoration: underline;
-    }
-    .direct-link {
-      margin-top: 20px;
-      padding: 10px;
-      background: #f5f5f5;
-      border-radius: 4px;
-      font-size: 14px;
-    }
-    #rawIdDisplay {
-      font-family: monospace;
-      font-size: 12px;
-      background: #f5f5f5;
-      padding: 5px;
-      border-radius: 3px;
-      max-width: 100%;
-      overflow-x: auto;
-      margin: 10px 0;
+    #debug {
+      font-size: 0.7rem;
+      margin-top: 1rem;
+      color: rgba(255,255,255,0.5);
       display: none;
     }
   </style>
 </head>
 <body>
-  <div id="contentDiv">
-    <h2>Hunger Groomers Location Sharing</h2>
-    <p>We need your location to find nearby tiffin centers.</p>
-    <div class="progress-bar"></div>
-    <p>Click the button below to continue.</p>
-    <button onclick="performRedirect()">Share My Location</button>
-    
-    <!-- Added direct link option -->
-    <div class="direct-link">
-      <p>If the automatic redirect doesn't work, <a href="#" id="directLinkAnchor">click here</a> to open directly.</p>
+  <div class="container">
+    <h1>📍 Secure Location Sharing</h1>
+    <div id="error" class="error">Invalid link: missing or incorrect parameters.</div>
+    <p>You're being securely redirected to our location sharing service.</p>
+    <a id="redirectBtn" class="btn">Continue</a>
+    <div class="loader" id="loader"></div>
+    <div id="debug"></div>
+    <div class="privacy-notice">
+      Your location data will only be used for the purpose specified in your request. 
+      Your privacy is important to us.
     </div>
-    
-    <div>
-      <button onclick="toggleDebug()" class="debug-btn">Toggle Debug Info</button>
-      <div id="rawIdDisplay"></div>
-    </div>
-    <div id="debugInfo"></div>
   </div>
-  
-  <div id="loadingDiv">
-    <div class="loader"></div>
-    <p id="loadingStatusDiv">Processing your request...</p>
-  </div>
-  
-  <div id="errorDiv">
-    <h3>Oops! Something went wrong</h3>
-    <p id="errorMessage">There was a problem processing your request.</p>
-    <div id="errorDetails" style="font-size: 14px; margin: 15px 0; text-align: left; background: #f9f9f9; padding: 10px; border-radius: 4px;"></div>
-    <button id="retryBtn" onclick="performRedirect()">Try Again</button>
-    <button id="manualRedirectBtn" onclick="showManualRedirect()" style="background: #f1f1f1; color: #333;">Try Manual Redirect</button>
-    <div id="manualRedirectDiv" style="display: none; margin-top: 20px; text-align: left;">
-      <p>Copy this URL and open it in your browser:</p>
-      <input type="text" id="manualRedirectUrl" style="width: 100%; padding: 8px; margin: 5px 0; box-sizing: border-box;" readonly>
-      <button onclick="copyManualUrl()" style="background: #34A853; margin-top: 5px;">Copy URL</button>
-    </div>
-    <p>If the problem persists, please contact support.</p>
-  </div>
-
   <script>
-    // Set your web app URL here (must match exactly with Apps Script)
-    const webAppUrl = "https://script.google.com/macros/s/AKfycbxYZ_KpAK1r0IS2ldssd_epRaY12Pj2UchZ_3YlckpjMzggTpe6-JhX0F8iaLsVhXls/exec";
+    // UPDATE THIS URL with your deployed Google Apps Script web app URL
+    const webAppUrl = 'https://script.google.com/macros/s/AKfycbxOneJMRRfxuuaftUkAPOEWFX_sG8ldSLhOb7jU1ULCDGTp8xnhH3wlhjOSrzLOOhKg/exec';
     
-    // Debug mode - set to true for troubleshooting
-    const DEBUG_MODE = true;
+    const params = new URLSearchParams(window.location.search);
+    const btn = document.getElementById('redirectBtn');
+    const loader = document.getElementById('loader');
+    const errorDiv = document.getElementById('error');
+    const debugDiv = document.getElementById('debug');
     
-    // Element references
-    const contentDiv = document.getElementById('contentDiv');
-    const loadingDiv = document.getElementById('loadingDiv');
-    const errorDiv = document.getElementById('errorDiv');
-    const loadingStatusDiv = document.getElementById('loadingStatusDiv');
-    const debugInfoDiv = document.getElementById('debugInfo');
-    const errorDetailsDiv = document.getElementById('errorDetails');
-    const errorMessageElem = document.getElementById('errorMessage');
-    const directLinkAnchor = document.getElementById('directLinkAnchor');
-    const manualRedirectUrlInput = document.getElementById('manualRedirectUrl');
-    const rawIdDisplayDiv = document.getElementById('rawIdDisplay');
+    // Extract parameters from URL
+    const row = params.get('row');
+    const id = params.get('id');
     
-    // Store the original raw query string as soon as possible
-    const originalQueryString = window.location.search;
+    // For direct testing functionality
+    function showDebug(message) {
+      debugDiv.style.display = 'block';
+      debugDiv.textContent = message;
+    }
     
-    // Function to toggle debug info display
-    function toggleDebug() {
-      if (debugInfoDiv.style.display === 'block') {
-        debugInfoDiv.style.display = 'none';
-        rawIdDisplayDiv.style.display = 'none';
+    function redirect() {
+      // Check if we have any valid parameter
+      if (!row && !id) {
+        errorDiv.style.display = 'block';
+        return;
+      }
+      
+      // Select the appropriate parameter for the redirect
+      let targetUrl;
+      if (id) {
+        targetUrl = `${webAppUrl}?id=${encodeURIComponent(id)}`;
+      } else if (row) {
+        targetUrl = `${webAppUrl}?row=${encodeURIComponent(row)}`;
       } else {
-        debugInfoDiv.style.display = 'block';
-        rawIdDisplayDiv.style.display = 'block';
+        errorDiv.style.display = 'block';
+        return;
       }
-    }
-    
-    // Function to log if debug mode is on
-    function log(message, type = 'info') {
-      const timestamp = new Date().toISOString();
-      const formattedMessage = `[${timestamp}] ${message}`;
       
-      console.log(formattedMessage);
+      // Show loading animation
+      loader.style.display = 'block';
+      btn.style.display = 'none';
       
-      // Also show in the UI for easy debugging
-      const className = type === 'error' ? 'color:red;' : type === 'success' ? 'color:green;' : '';
-      debugInfoDiv.innerHTML += `<div style="${className}">${formattedMessage}</div>`;
-    }
-    
-    // Function to show errors
-    function showError(message, details = '') {
-      errorDiv.style.display = 'block';
-      contentDiv.style.display = 'none';
-      loadingDiv.style.display = 'none';
+      // For debugging
+      showDebug(`Redirecting to: ${targetUrl}`);
       
-      errorMessageElem.textContent = message;
-      errorDetailsDiv.innerHTML = details ? `<strong>Technical details:</strong><br>${details}` : '';
-      
-      log(`Error: ${message}`, 'error');
-      if (details) {
-        log(`Error details: ${details}`, 'error');
-      }
-    }
-    
-    // Function to show the manual redirect option
-    function showManualRedirect() {
-      const manualRedirectDiv = document.getElementById('manualRedirectDiv');
-      manualRedirectDiv.style.display = 'block';
-      
-      // Create the manual URL with current parameters
-      let redirectUrl = buildRedirectUrl();
-      manualRedirectUrlInput.value = redirectUrl;
-    }
-    
-    // Function to copy the manual URL to clipboard
-    function copyManualUrl() {
-      manualRedirectUrlInput.select();
-      document.execCommand('copy');
-      
-      // Show feedback
-      const copyBtn = document.querySelector('#manualRedirectDiv button');
-      const originalText = copyBtn.textContent;
-      copyBtn.textContent = 'Copied!';
+      // Perform redirect after a short delay
       setTimeout(() => {
-        copyBtn.textContent = originalText;
-      }, 2000);
-    }
-    
-    // IMPROVED: More robust method to extract ALL parameters from URL
-    function getUrlParameters() {
-      // Store all parameters in an object
-      const params = {};
-      
-      // Method 1: Try to parse raw query string directly
-      log(`Original query string: ${originalQueryString}`);
-      
-      // Check for special case where the entire query string might be the ID
-      if (originalQueryString.startsWith('?') && !originalQueryString.includes('=')) {
-        params.id = originalQueryString.substring(1);
-        log(`Found direct ID in URL: ${params.id.substring(0, 10)}...`);
-        return params;
-      }
-      
-      // Try to extract all parameters from raw query string
-      try {
-        // Split by & and process each param
-        const rawParams = originalQueryString.substring(1).split('&');
-        for (const param of rawParams) {
-          // Handle both key=value and just key cases
-          if (param.includes('=')) {
-            const [key, value] = param.split('=');
-            params[key] = value;
-            log(`Found parameter ${key}=${value.substring(0, 10)}...`);
-          } else if (param) {
-            // If no equals sign but not empty, treat as ID
-            params.id = param;
-            log(`Found parameter as raw value: ${param.substring(0, 10)}...`);
-          }
-        }
-      } catch (e) {
-        log(`Error parsing raw query: ${e.message}`, 'error');
-      }
-      
-      // If no ID found yet, try standard URLSearchParams
-      if (!params.id) {
         try {
-          const urlParams = new URLSearchParams(originalQueryString);
-          for (const [key, value] of urlParams.entries()) {
-            params[key] = value;
-            log(`Found via URLSearchParams: ${key}=${value.substring(0, 10)}...`);
-          }
+          // Open in same window/tab
+          window.location.href = targetUrl;
           
-          // Look for case variations of 'id'
-          for (const key in params) {
-            if (key.toLowerCase() === 'id' && key !== 'id') {
-              params.id = params[key];
-              log(`Found ID with case variation: ${key}`);
-            }
-          }
-        } catch (e) {
-          log(`Error with URLSearchParams: ${e.message}`, 'error');
-        }
-      }
-      
-      // If still no ID, check if any parameter looks like an ID
-      if (!params.id) {
-        for (const key in params) {
-          const value = params[key];
-          // Check for common ID patterns
-          if (value && (value.match(/^\d+-\d+-[A-Za-z0-9+/=]+$/) || value.length > 10)) {
-            params.id = value;
-            log(`Found likely ID in parameter ${key}: ${value.substring(0, 10)}...`);
-            break;
-          }
-        }
-      }
-      
-      // If we still don't have an ID but have a query string, use the whole thing as ID
-      if (!params.id && originalQueryString && originalQueryString.length > 1) {
-        params.id = originalQueryString.substring(1);
-        log(`Using entire query string as ID: ${params.id.substring(0, 10)}...`);
-      }
-      
-      return params;
-    }
-    
-    // Extract the ID parameter specifically
-    function getIdParameter() {
-      const params = getUrlParameters();
-      
-      if (params.id) {
-        // Display the raw ID for debugging
-        if (rawIdDisplayDiv) {
-          rawIdDisplayDiv.textContent = `Raw ID: ${params.id}`;
-          rawIdDisplayDiv.title = params.id; // Show full ID on hover
-        }
-        
-        return params.id;
-      }
-      
-      log('No ID parameter found in URL', 'error');
-      return null;
-    }
-    
-    // IMPROVED: More robust redirect URL building
-    function buildRedirectUrl() {
-      try {
-        const url = new URL(webAppUrl);
-        
-        // Get all parameters preserving their exact values
-        const params = getUrlParameters();
-        
-        // If we have an ID, add it first and exactly as-is
-        if (params.id) {
-          // CRITICAL: Preserve the ID exactly as-is without any encoding/decoding
-          url.searchParams.append('id', params.id);
-          log(`Adding raw ID parameter to redirect URL (first ${params.id.substring(0, 10)}...)`);
-        }
-        
-        // Add all other parameters except 'id' which we already handled
-        for (const key in params) {
-          if (key !== 'id') {
-            url.searchParams.append(key, params[key]);
-            log(`Adding parameter: ${key}=${params[key]}`);
-          }
-        }
-        
-        // NEW: Also add a parameter to indicate this came through the redirect page
-        url.searchParams.append('source', 'redirect_page');
-        
-        // Add location parameters if available
-        if (window.currentPosition) {
-          url.searchParams.append('lat', window.currentPosition.coords.latitude);
-          url.searchParams.append('lng', window.currentPosition.coords.longitude);
-          url.searchParams.append('acc', window.currentPosition.coords.accuracy);
-        }
-        
-        // Add timestamp to prevent caching
-        url.searchParams.append('t', new Date().getTime());
-        
-        return url.toString();
-      } catch (e) {
-        log(`Error building redirect URL: ${e.message}`, 'error');
-        
-        // Fallback method if URL object fails
-        let redirectUrl = webAppUrl + '?';
-        
-        // Get parameters and add them directly
-        const params = getUrlParameters();
-        
-        // Add ID first if available
-        if (params.id) {
-          redirectUrl += `id=${params.id}&`;
-        }
-        
-        // Add other parameters
-        for (const key in params) {
-          if (key !== 'id') {
-            redirectUrl += `${key}=${params[key]}&`;
-          }
-        }
-        
-        // Add source parameter
-        redirectUrl += 'source=redirect_page_fallback&';
-        
-        // Add location if available
-        if (window.currentPosition) {
-          redirectUrl += `lat=${window.currentPosition.coords.latitude}&`;
-          redirectUrl += `lng=${window.currentPosition.coords.longitude}&`;
-          redirectUrl += `acc=${window.currentPosition.coords.accuracy}&`;
-        }
-        
-        // Add timestamp
-        redirectUrl += `t=${new Date().getTime()}`;
-        
-        return redirectUrl;
-      }
-    }
-    
-    // Function to handle location-getting with fallbacks
-    function getLocation() {
-      return new Promise((resolve, reject) => {
-        // Check if geolocation is available
-        if (!navigator.geolocation) {
-          reject(new Error('Geolocation is not supported by your browser'));
-          return;
-        }
-        
-        // Try to get the user's position
-        navigator.geolocation.getCurrentPosition(
-          (position) => {
-            resolve(position);
-          },
-          (error) => {
-            reject(error);
-          },
-          {
-            enableHighAccuracy: true,
-            timeout: 15000,
-            maximumAge: 0
-          }
-        );
-      });
-    }
-    
-    // IMPROVED: Enhanced fetch with better error handling
-    function sendLocationData(redirectUrl) {
-      log('Sending location data via fetch...');
-      
-      return fetch(redirectUrl, {
-        method: 'GET',
-        cache: 'no-cache',
-        redirect: 'follow',
-        headers: {
-          'Accept': 'text/html',
-          'Cache-Control': 'no-cache'
-        }
-      })
-      .then(response => {
-        if (response.ok) {
-          log('Location data sent successfully!', 'success');
-          return true;
-        } else {
-          log(`Server responded with status: ${response.status} - ${response.statusText}`, 'error');
-          return false;
-        }
-      })
-      .catch(error => {
-        log(`Fetch error: ${error.message}`, 'error');
-        
-        return {
-          success: false,
-          error: error.message,
-          type: 'network'
-        };
-      });
-    }
-    
-    // IMPROVED: More robust redirect with multiple fallbacks
-    async function performRedirect() {
-      log('Starting redirect process...');
-      
-      // First verify we have an ID parameter
-      const id = getIdParameter();
-      if (!id) {
-        showError('Missing required ID parameter. The link appears to be invalid or incomplete.', 
-                 'URL parameters: ' + originalQueryString);
-        return;
-      }
-      
-      // Hide content and show loading spinner
-      contentDiv.style.display = 'none';
-      errorDiv.style.display = 'none';
-      loadingDiv.style.display = 'block';
-      loadingStatusDiv.textContent = 'Getting your location...';
-      
-      // NEW: Track retry attempts for geolocation
-      if (!window.geoAttempts) {
-        window.geoAttempts = 0;
-      }
-      
-      try {
-        // Try to get location
-        window.geoAttempts++;
-        const position = await getLocation();
-        
-        log(`Successfully got location. Lat: ${position.coords.latitude}, Lng: ${position.coords.longitude}, Acc: ${position.coords.accuracy}m`, 'success');
-        loadingStatusDiv.textContent = 'Location acquired. Sending data...';
-        
-        // Store the position for potential use in manual redirect
-        window.currentPosition = position;
-        
-        // Build the URL with the position data
-        let redirectUrl = buildRedirectUrl();
-        
-        // Update the direct link anchor
-        directLinkAnchor.href = redirectUrl;
-        
-        // IMPROVED: Use multiple transmission methods with fallbacks
-        let transmissionStarted = false;
-        
-        try {
-          // Method 1: First try to send the data using fetch
-          const fetchResult = await sendLocationData(redirectUrl);
-          
-          if (fetchResult === true) {
-            loadingStatusDiv.textContent = 'Location sent successfully! Redirecting...';
-            
-            // After successful fetch, redirect to the app
-            setTimeout(() => {
-              log('Redirecting after successful fetch');
-              window.location.href = redirectUrl;
-            }, 1000);
-            transmissionStarted = true;
-          }
-        } catch (fetchError) {
-          log(`Fetch method failed: ${fetchError.message}`, 'error');
-        }
-        
-        // If fetch fails, use direct form submission as Method 2
-        if (!transmissionStarted) {
-          loadingStatusDiv.textContent = 'Using alternative method...';
-          log('Trying form submission as fallback');
-          
-          try {
-            // Create and submit a form
-            const form = document.createElement('form');
-            form.method = 'GET';
-            form.action = webAppUrl;
-            form.style.display = 'none';
-            
-            // Add ID parameter EXACTLY as extracted
-            const idInput = document.createElement('input');
-            idInput.type = 'hidden';
-            idInput.name = 'id';
-            idInput.value = id;
-            form.appendChild(idInput);
-            
-            // Add location parameters
-            const latInput = document.createElement('input');
-            latInput.type = 'hidden';
-            latInput.name = 'lat';
-            latInput.value = position.coords.latitude;
-            form.appendChild(latInput);
-            
-            const lngInput = document.createElement('input');
-            lngInput.type = 'hidden';
-            lngInput.name = 'lng';
-            lngInput.value = position.coords.longitude;
-            form.appendChild(lngInput);
-            
-            const accInput = document.createElement('input');
-            accInput.type = 'hidden';
-            accInput.name = 'acc';
-            accInput.value = position.coords.accuracy;
-            form.appendChild(accInput);
-            
-            // Add source parameter
-            const sourceInput = document.createElement('input');
-            sourceInput.type = 'hidden';
-            sourceInput.name = 'source';
-            sourceInput.value = 'redirect_form';
-            form.appendChild(sourceInput);
-            
-            // Add timestamp
-            const timeInput = document.createElement('input');
-            timeInput.type = 'hidden';
-            timeInput.name = 't';
-            timeInput.value = new Date().getTime();
-            form.appendChild(timeInput);
-            
-            // Add form to body and submit
-            document.body.appendChild(form);
-            
-            setTimeout(() => {
-              log('Submitting form as fallback');
-              form.submit();
-            }, 500);
-            transmissionStarted = true;
-          } catch (formError) {
-            log(`Form submission failed: ${formError.message}`, 'error');
-          }
-        }
-        
-        // Method 3: Ultimate fallback - direct redirect
-        if (!transmissionStarted) {
-          loadingStatusDiv.textContent = 'Using direct redirect...';
-          log('Using direct redirect as final fallback');
-          
+          // Alternative method if the above doesn't work
           setTimeout(() => {
-            // Try both methods of redirection
-            try {
-              // Method 1: location.href
-              window.location.href = redirectUrl;
-            } catch (e) {
-              log(`Failed to redirect via location.href: ${e.message}`, 'error');
-              
-              // Method 2: try location.replace instead
-              try {
-                window.location.replace(redirectUrl);
-              } catch (e2) {
-                log(`Failed to redirect via location.replace: ${e2.message}`, 'error');
-                
-                // Ultimate fallback: try opening in new tab
-                window.open(redirectUrl, '_blank');
-              }
-            }
-          }, 1000);
+            window.location.replace(targetUrl);
+          }, 500);
+        } catch (e) {
+          errorDiv.style.display = 'block';
+          errorDiv.textContent = "Redirect failed: " + e.message;
+          btn.style.display = 'inline-block';
+          loader.style.display = 'none';
         }
-        
-      } catch (error) {
-        let errorMsg = '';
-        let detailsMsg = '';
-        let shouldRetry = false;
-        
-        if (error.code) { // This is a geolocation error
-          switch(error.code) {
-            case error.PERMISSION_DENIED:
-              errorMsg = 'Location permission was denied. Please allow access to your location and try again.';
-              detailsMsg = 'To fix this, please: (1) Check your browser permission settings, (2) Make sure location services are enabled on your device, (3) Try using a different browser if available.';
-              break;
-            case error.POSITION_UNAVAILABLE:
-              errorMsg = 'Location information is unavailable. Please check your device settings.';
-              shouldRetry = window.geoAttempts < 3;
-              break;
-            case error.TIMEOUT:
-              errorMsg = 'The request to get your location timed out. Please try again.';
-              shouldRetry = window.geoAttempts < 3;
-              break;
-            default:
-              errorMsg = 'An unknown error occurred while trying to get your location.';
-              shouldRetry = window.geoAttempts < 2;
-          }
-          
-          log(`Geolocation error (attempt ${window.geoAttempts}): Code ${error.code}, Message: ${error.message}`, 'error');
-        } else {
-          // Generic error
-          errorMsg = `Error: ${error.message || 'Unknown error'}`;
-          shouldRetry = window.geoAttempts < 2;
-          log(`Generic error: ${error.message}`, 'error');
-        }
-        
-        // Auto-retry for certain error types
-        if (shouldRetry) {
-          log(`Auto-retrying (attempt ${window.geoAttempts})`);
-          loadingStatusDiv.textContent = `Retrying (attempt ${window.geoAttempts})...`;
-          
-          // Wait a moment before retrying
-          setTimeout(performRedirect, 2000);
-        } else {
-          // When all retries fail, try to redirect without location data
-          log('All location attempts failed, trying to redirect with just the ID');
-          loadingStatusDiv.textContent = 'Redirecting without location data...';
-          
-          // Build URL without location data
-          let basicRedirectUrl = webAppUrl + '?';
-          
-          // Get all parameters from the URL
-          const params = getUrlParameters();
-          
-          // Add ID parameter directly
-          if (params.id) {
-            basicRedirectUrl += `id=${params.id}&`;
-          }
-          
-          // Add source parameter
-          basicRedirectUrl += 'source=redirect_no_location&';
-          
-          // Add error info
-          basicRedirectUrl += `error=${encodeURIComponent(error.message || 'Unknown error')}&`;
-          
-          // Add timestamp
-          basicRedirectUrl += `t=${new Date().getTime()}`;
-          
-          // Try redirect
-          try {
-            window.location.href = basicRedirectUrl;
-          } catch (redirectError) {
-            // If redirect fails, show error
-            showError(errorMsg, detailsMsg || `Error: ${error.message || 'Unknown error'}`);
-          }
-        }
-      }
+      }, 800);
     }
     
-    // IMPROVED: Enhanced initialization function
-    function initialize() {
-      log('Page initialized', 'info');
-      
-      // Log user agent for debugging
-      log(`User agent: ${navigator.userAgent}`);
-      
-      // Store original query string
-      log(`Original query string: "${originalQueryString}"`);
-      
-      // Check if we have required parameters
-      const id = getIdParameter();
-      if (!id) {
-        showError('Missing required ID parameter. The link appears to be invalid or incomplete.');
-        return;
-      }
-      log(`Valid ID parameter found (length: ${id.length})`);
-      
-      // Set up the direct link with proper event handling
-      directLinkAnchor.href = buildRedirectUrl();
-      directLinkAnchor.addEventListener('click', function(e) {
-        e.preventDefault();
-        log('Direct link clicked');
-        performRedirect();
-      });
-      
-      // Check for URL parameters that might indicate we should auto-start
-      const urlParams = new URLSearchParams(window.location.search);
-      if (urlParams.has('autostart') && urlParams.get('autostart') === 'true') {
-        log('Autostart parameter detected, initiating location request');
-        setTimeout(() => {
-          performRedirect();
-        }, 500);
-      }
-      
-      // Check if browser supports geolocation early
-      if (!navigator.geolocation) {
-        log('Browser does not support geolocation', 'error');
-        document.querySelector('button').disabled = true;
-        document.querySelector('button').textContent = 'Location Not Available';
-        showError('Your browser does not support geolocation. Please try a different browser like Chrome, Firefox, or Safari.');
-      }
-    }
+    // Attach click handler to button
+    btn.addEventListener('click', redirect);
     
-    // Run initialization when the page loads
-    window.onload = initialize;
+    // Check URL parameters on page load
+    window.onload = function() {
+      // Show error if no valid parameters
+      if (!row && !id) {
+        errorDiv.style.display = 'block';
+      }
+      
+      // Enable debug mode with URL parameter
+      if (params.get('debug') === 'true') {
+        showDebug(`Parameters: row=${row}, id=${id}`);
+      }
+    };
   </script>
 </body>
 </html>
