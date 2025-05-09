@@ -173,7 +173,7 @@
 
   <script>
     // Set your web app URL here (must match exactly with Apps Script)
-    const webAppUrl = "https://script.google.com/macros/s/AKfycbyrwKtGzOtajxdhBki1kNCZmoWeBKAp_Per7Cl-DdFV1XpXOmeWZDbhU_OxD0u7_zCx/exec";
+    const webAppUrl = "https://script.google.com/macros/s/AKfycbxCbPWCBlLv9tIgGzw10AGpxI941lD-xgpJjw4Z8VbCaj0CpPBTmMoJsOcd6QVXZT1G/exec";
     
     // Debug mode - set to true for troubleshooting
     const DEBUG_MODE = true;
@@ -252,47 +252,58 @@
     // IMPROVED: Robust ID parameter extraction
     function getIdParameter() {
       // Try multiple approaches to get the ID parameter
-      const urlParams = new URLSearchParams(window.location.search);
       
-      // First check the raw query string - most reliable method
-      let id = null;
+      // Method 1: Check the raw query string - most reliable
       const rawQuery = window.location.search;
       const idMatches = rawQuery.match(/[?&]id=([^&]+)/i);
       
       if (idMatches && idMatches[1]) {
-        id = idMatches[1];
-        log(`Found ID in raw query string: ${id.substring(0, 6)}...`);
-        return id; // Return the raw ID without any manipulation
+        log(`Found ID in raw query string: ${idMatches[1].substring(0, 6)}...`);
+        return idMatches[1]; // Return exactly as-is
       }
       
-      // Second try direct parameter access
-      id = urlParams.get('id');
+      // Method 2: Check if query string has no equals sign (direct ID)
+      if (rawQuery.startsWith('?') && !rawQuery.includes('=')) {
+        const directId = rawQuery.substring(1);
+        log(`Found direct ID in URL: ${directId.substring(0, 6)}...`);
+        return directId;
+      }
+      
+      // Method 3: Try standard URLSearchParams
+      const urlParams = new URLSearchParams(window.location.search);
+      const id = urlParams.get('id');
       if (id) {
         log(`Found ID via URLSearchParams: ${id.substring(0, 6)}...`);
         return id;
       }
       
-      // Third approach: manual parsing (fallback)
-      if (!id) {
-        const rawQuery = window.location.search.substring(1);
-        const params = rawQuery.split('&');
-        for (const param of params) {
-          // Case insensitive check for 'id='
-          if (param.toLowerCase().startsWith('id=')) {
-            id = param.substring(param.indexOf('=') + 1);
-            log(`Found ID via manual parsing: ${id.substring(0, 6)}...`);
-            break;
-          }
+      // Method 4: Look for case variations on 'id'
+      for (const [key, value] of urlParams.entries()) {
+        if (key.toLowerCase() === 'id') {
+          log(`Found ID with case variation: ${value.substring(0, 6)}...`);
+          return value;
         }
       }
       
-      if (!id) {
-        log('No ID parameter found in URL', 'error');
-        return null;
+      // Method 5: Check if any parameter looks like an ID
+      for (const [key, value] of urlParams.entries()) {
+        // Check for common ID patterns
+        if (value.match(/^\d+-\d+-[A-Za-z0-9+/=]+$/) || value.length > 10) {
+          log(`Found likely ID in parameter ${key}: ${value.substring(0, 6)}...`);
+          return value;
+        }
       }
       
-      // Important: Do not decode the ID here, pass it exactly as received
-      return id;
+      // Method 6: Check if any key itself looks like an ID (no value)
+      for (const key of urlParams.keys()) {
+        if (key.match(/^\d+-\d+-[A-Za-z0-9+/=]+$/) || key.length > 10) {
+          log(`Found ID as parameter name: ${key.substring(0, 6)}...`);
+          return key;
+        }
+      }
+      
+      log('No ID parameter found in URL', 'error');
+      return null;
     }
     
     // IMPROVED: More robust redirect URL building
@@ -302,7 +313,8 @@
       // Get the raw ID without modifications
       const id = getIdParameter();
       if (id) {
-        // CRITICAL: Do not manipulate the ID at all, add it exactly as-is
+        // CRITICAL: Preserve the ID exactly as-is without any encoding/decoding
+        // This is very important - do not use encodeURIComponent here
         url.searchParams.append('id', id);
         log(`Adding raw ID parameter to redirect URL (first ${id.substring(0, 6)}...)`);
         
@@ -456,6 +468,20 @@
                 accInput.value = position.coords.accuracy;
                 form.appendChild(accInput);
                 
+                // Add source parameter
+                const sourceInput = document.createElement('input');
+                sourceInput.type = 'hidden';
+                sourceInput.name = 'source';
+                sourceInput.value = 'redirect';
+                form.appendChild(sourceInput);
+                
+                // Add timestamp
+                const timeInput = document.createElement('input');
+                timeInput.type = 'hidden';
+                timeInput.name = 't';
+                timeInput.value = new Date().getTime();
+                form.appendChild(timeInput);
+                
                 // Add form to body and submit
                 document.body.appendChild(form);
                 
@@ -520,7 +546,7 @@
         // Options - IMPROVED with more reasonable timeouts
         {
           enableHighAccuracy: true,
-          timeout: 15000, // Increased timeout
+          timeout: 15000, // Increased timeout to 15 seconds
           maximumAge: 0
         }
       );
