@@ -131,6 +131,17 @@
       border-radius: 4px;
       font-size: 14px;
     }
+    #rawIdDisplay {
+      font-family: monospace;
+      font-size: 12px;
+      background: #f5f5f5;
+      padding: 5px;
+      border-radius: 3px;
+      max-width: 100%;
+      overflow-x: auto;
+      margin: 10px 0;
+      display: none;
+    }
   </style>
 </head>
 <body>
@@ -148,6 +159,7 @@
     
     <div>
       <button onclick="toggleDebug()" class="debug-btn">Toggle Debug Info</button>
+      <div id="rawIdDisplay"></div>
     </div>
     <div id="debugInfo"></div>
   </div>
@@ -173,7 +185,7 @@
 
   <script>
     // Set your web app URL here (must match exactly with Apps Script)
-    const webAppUrl = "https://script.google.com/macros/s/AKfycbxCbPWCBlLv9tIgGzw10AGpxI941lD-xgpJjw4Z8VbCaj0CpPBTmMoJsOcd6QVXZT1G/exec";
+    const webAppUrl = "https://script.google.com/macros/s/AKfycbxYZ_KpAK1r0IS2ldssd_epRaY12Pj2UchZ_3YlckpjMzggTpe6-JhX0F8iaLsVhXls/exec";
     
     // Debug mode - set to true for troubleshooting
     const DEBUG_MODE = true;
@@ -188,13 +200,19 @@
     const errorMessageElem = document.getElementById('errorMessage');
     const directLinkAnchor = document.getElementById('directLinkAnchor');
     const manualRedirectUrlInput = document.getElementById('manualRedirectUrl');
+    const rawIdDisplayDiv = document.getElementById('rawIdDisplay');
+    
+    // Store the original raw query string as soon as possible
+    const originalQueryString = window.location.search;
     
     // Function to toggle debug info display
     function toggleDebug() {
       if (debugInfoDiv.style.display === 'block') {
         debugInfoDiv.style.display = 'none';
+        rawIdDisplayDiv.style.display = 'none';
       } else {
         debugInfoDiv.style.display = 'block';
+        rawIdDisplayDiv.style.display = 'block';
       }
     }
     
@@ -249,57 +267,96 @@
       }, 2000);
     }
     
-    // IMPROVED: Robust ID parameter extraction
+    // IMPROVED: More robust method to extract ALL parameters from URL
+    function getUrlParameters() {
+      // Store all parameters in an object
+      const params = {};
+      
+      // Method 1: Try to parse raw query string directly
+      log(`Original query string: ${originalQueryString}`);
+      
+      // Check for special case where the entire query string might be the ID
+      if (originalQueryString.startsWith('?') && !originalQueryString.includes('=')) {
+        params.id = originalQueryString.substring(1);
+        log(`Found direct ID in URL: ${params.id.substring(0, 10)}...`);
+        return params;
+      }
+      
+      // Try to extract all parameters from raw query string
+      try {
+        // Split by & and process each param
+        const rawParams = originalQueryString.substring(1).split('&');
+        for (const param of rawParams) {
+          // Handle both key=value and just key cases
+          if (param.includes('=')) {
+            const [key, value] = param.split('=');
+            params[key] = value;
+            log(`Found parameter ${key}=${value.substring(0, 10)}...`);
+          } else if (param) {
+            // If no equals sign but not empty, treat as ID
+            params.id = param;
+            log(`Found parameter as raw value: ${param.substring(0, 10)}...`);
+          }
+        }
+      } catch (e) {
+        log(`Error parsing raw query: ${e.message}`, 'error');
+      }
+      
+      // If no ID found yet, try standard URLSearchParams
+      if (!params.id) {
+        try {
+          const urlParams = new URLSearchParams(originalQueryString);
+          for (const [key, value] of urlParams.entries()) {
+            params[key] = value;
+            log(`Found via URLSearchParams: ${key}=${value.substring(0, 10)}...`);
+          }
+          
+          // Look for case variations of 'id'
+          for (const key in params) {
+            if (key.toLowerCase() === 'id' && key !== 'id') {
+              params.id = params[key];
+              log(`Found ID with case variation: ${key}`);
+            }
+          }
+        } catch (e) {
+          log(`Error with URLSearchParams: ${e.message}`, 'error');
+        }
+      }
+      
+      // If still no ID, check if any parameter looks like an ID
+      if (!params.id) {
+        for (const key in params) {
+          const value = params[key];
+          // Check for common ID patterns
+          if (value && (value.match(/^\d+-\d+-[A-Za-z0-9+/=]+$/) || value.length > 10)) {
+            params.id = value;
+            log(`Found likely ID in parameter ${key}: ${value.substring(0, 10)}...`);
+            break;
+          }
+        }
+      }
+      
+      // If we still don't have an ID but have a query string, use the whole thing as ID
+      if (!params.id && originalQueryString && originalQueryString.length > 1) {
+        params.id = originalQueryString.substring(1);
+        log(`Using entire query string as ID: ${params.id.substring(0, 10)}...`);
+      }
+      
+      return params;
+    }
+    
+    // Extract the ID parameter specifically
     function getIdParameter() {
-      // Try multiple approaches to get the ID parameter
+      const params = getUrlParameters();
       
-      // Method 1: Check the raw query string - most reliable
-      const rawQuery = window.location.search;
-      const idMatches = rawQuery.match(/[?&]id=([^&]+)/i);
-      
-      if (idMatches && idMatches[1]) {
-        log(`Found ID in raw query string: ${idMatches[1].substring(0, 6)}...`);
-        return idMatches[1]; // Return exactly as-is
-      }
-      
-      // Method 2: Check if query string has no equals sign (direct ID)
-      if (rawQuery.startsWith('?') && !rawQuery.includes('=')) {
-        const directId = rawQuery.substring(1);
-        log(`Found direct ID in URL: ${directId.substring(0, 6)}...`);
-        return directId;
-      }
-      
-      // Method 3: Try standard URLSearchParams
-      const urlParams = new URLSearchParams(window.location.search);
-      const id = urlParams.get('id');
-      if (id) {
-        log(`Found ID via URLSearchParams: ${id.substring(0, 6)}...`);
-        return id;
-      }
-      
-      // Method 4: Look for case variations on 'id'
-      for (const [key, value] of urlParams.entries()) {
-        if (key.toLowerCase() === 'id') {
-          log(`Found ID with case variation: ${value.substring(0, 6)}...`);
-          return value;
+      if (params.id) {
+        // Display the raw ID for debugging
+        if (rawIdDisplayDiv) {
+          rawIdDisplayDiv.textContent = `Raw ID: ${params.id}`;
+          rawIdDisplayDiv.title = params.id; // Show full ID on hover
         }
-      }
-      
-      // Method 5: Check if any parameter looks like an ID
-      for (const [key, value] of urlParams.entries()) {
-        // Check for common ID patterns
-        if (value.match(/^\d+-\d+-[A-Za-z0-9+/=]+$/) || value.length > 10) {
-          log(`Found likely ID in parameter ${key}: ${value.substring(0, 6)}...`);
-          return value;
-        }
-      }
-      
-      // Method 6: Check if any key itself looks like an ID (no value)
-      for (const key of urlParams.keys()) {
-        if (key.match(/^\d+-\d+-[A-Za-z0-9+/=]+$/) || key.length > 10) {
-          log(`Found ID as parameter name: ${key.substring(0, 6)}...`);
-          return key;
-        }
+        
+        return params.id;
       }
       
       log('No ID parameter found in URL', 'error');
@@ -308,32 +365,103 @@
     
     // IMPROVED: More robust redirect URL building
     function buildRedirectUrl() {
-      const url = new URL(webAppUrl);
-      
-      // Get the raw ID without modifications
-      const id = getIdParameter();
-      if (id) {
-        // CRITICAL: Preserve the ID exactly as-is without any encoding/decoding
-        // This is very important - do not use encodeURIComponent here
-        url.searchParams.append('id', id);
-        log(`Adding raw ID parameter to redirect URL (first ${id.substring(0, 6)}...)`);
+      try {
+        const url = new URL(webAppUrl);
+        
+        // Get all parameters preserving their exact values
+        const params = getUrlParameters();
+        
+        // If we have an ID, add it first and exactly as-is
+        if (params.id) {
+          // CRITICAL: Preserve the ID exactly as-is without any encoding/decoding
+          url.searchParams.append('id', params.id);
+          log(`Adding raw ID parameter to redirect URL (first ${params.id.substring(0, 10)}...)`);
+        }
+        
+        // Add all other parameters except 'id' which we already handled
+        for (const key in params) {
+          if (key !== 'id') {
+            url.searchParams.append(key, params[key]);
+            log(`Adding parameter: ${key}=${params[key]}`);
+          }
+        }
         
         // NEW: Also add a parameter to indicate this came through the redirect page
         url.searchParams.append('source', 'redirect_page');
+        
+        // Add location parameters if available
+        if (window.currentPosition) {
+          url.searchParams.append('lat', window.currentPosition.coords.latitude);
+          url.searchParams.append('lng', window.currentPosition.coords.longitude);
+          url.searchParams.append('acc', window.currentPosition.coords.accuracy);
+        }
+        
+        // Add timestamp to prevent caching
+        url.searchParams.append('t', new Date().getTime());
+        
+        return url.toString();
+      } catch (e) {
+        log(`Error building redirect URL: ${e.message}`, 'error');
+        
+        // Fallback method if URL object fails
+        let redirectUrl = webAppUrl + '?';
+        
+        // Get parameters and add them directly
+        const params = getUrlParameters();
+        
+        // Add ID first if available
+        if (params.id) {
+          redirectUrl += `id=${params.id}&`;
+        }
+        
+        // Add other parameters
+        for (const key in params) {
+          if (key !== 'id') {
+            redirectUrl += `${key}=${params[key]}&`;
+          }
+        }
+        
+        // Add source parameter
+        redirectUrl += 'source=redirect_page_fallback&';
+        
+        // Add location if available
+        if (window.currentPosition) {
+          redirectUrl += `lat=${window.currentPosition.coords.latitude}&`;
+          redirectUrl += `lng=${window.currentPosition.coords.longitude}&`;
+          redirectUrl += `acc=${window.currentPosition.coords.accuracy}&`;
+        }
+        
+        // Add timestamp
+        redirectUrl += `t=${new Date().getTime()}`;
+        
+        return redirectUrl;
       }
-      
-      // Add location parameters if available
-      if (window.currentPosition) {
-        url.searchParams.append('lat', window.currentPosition.coords.latitude);
-        url.searchParams.append('lng', window.currentPosition.coords.longitude);
-        url.searchParams.append('acc', window.currentPosition.coords.accuracy);
-        url.searchParams.append('autostart', 'true'); // Auto-start the location request
-      }
-      
-      // Add timestamp to prevent caching
-      url.searchParams.append('t', new Date().getTime());
-      
-      return url.toString();
+    }
+    
+    // Function to handle location-getting with fallbacks
+    function getLocation() {
+      return new Promise((resolve, reject) => {
+        // Check if geolocation is available
+        if (!navigator.geolocation) {
+          reject(new Error('Geolocation is not supported by your browser'));
+          return;
+        }
+        
+        // Try to get the user's position
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            resolve(position);
+          },
+          (error) => {
+            reject(error);
+          },
+          {
+            enableHighAccuracy: true,
+            timeout: 15000,
+            maximumAge: 0
+          }
+        );
+      });
     }
     
     // IMPROVED: Enhanced fetch with better error handling
@@ -361,7 +489,6 @@
       .catch(error => {
         log(`Fetch error: ${error.message}`, 'error');
         
-        // NEW: Return more details about the fetch failure
         return {
           success: false,
           error: error.message,
@@ -371,14 +498,14 @@
     }
     
     // IMPROVED: More robust redirect with multiple fallbacks
-    function performRedirect() {
+    async function performRedirect() {
       log('Starting redirect process...');
       
       // First verify we have an ID parameter
       const id = getIdParameter();
       if (!id) {
         showError('Missing required ID parameter. The link appears to be invalid or incomplete.', 
-                 'URL parameters: ' + window.location.search);
+                 'URL parameters: ' + originalQueryString);
         return;
       }
       
@@ -388,130 +515,146 @@
       loadingDiv.style.display = 'block';
       loadingStatusDiv.textContent = 'Getting your location...';
       
-      // Check if geolocation is available
-      if (!navigator.geolocation) {
-        showError('Geolocation is not supported by your browser. Please use a modern browser that supports location services.');
-        return;
-      }
-      
       // NEW: Track retry attempts for geolocation
       if (!window.geoAttempts) {
         window.geoAttempts = 0;
       }
       
-      // Try to get the user's position
-      navigator.geolocation.getCurrentPosition(
-        // Success callback
-        function(position) {
-          log(`Successfully got location. Lat: ${position.coords.latitude}, Lng: ${position.coords.longitude}, Acc: ${position.coords.accuracy}m`, 'success');
-          loadingStatusDiv.textContent = 'Location acquired. Sending data...';
-          
-          // Store the position for potential use in manual redirect
-          window.currentPosition = position;
-          
-          // Build the URL with the position data
-          let redirectUrl = buildRedirectUrl();
-          
-          // Update the direct link anchor
-          directLinkAnchor.href = redirectUrl;
-          
-          // IMPROVED: Use multiple transmission methods with fallbacks
-          let transmissionStarted = false;
-          
+      try {
+        // Try to get location
+        window.geoAttempts++;
+        const position = await getLocation();
+        
+        log(`Successfully got location. Lat: ${position.coords.latitude}, Lng: ${position.coords.longitude}, Acc: ${position.coords.accuracy}m`, 'success');
+        loadingStatusDiv.textContent = 'Location acquired. Sending data...';
+        
+        // Store the position for potential use in manual redirect
+        window.currentPosition = position;
+        
+        // Build the URL with the position data
+        let redirectUrl = buildRedirectUrl();
+        
+        // Update the direct link anchor
+        directLinkAnchor.href = redirectUrl;
+        
+        // IMPROVED: Use multiple transmission methods with fallbacks
+        let transmissionStarted = false;
+        
+        try {
           // Method 1: First try to send the data using fetch
-          sendLocationData(redirectUrl).then(result => {
-            if (result === true) {
-              loadingStatusDiv.textContent = 'Location sent successfully! Redirecting...';
+          const fetchResult = await sendLocationData(redirectUrl);
+          
+          if (fetchResult === true) {
+            loadingStatusDiv.textContent = 'Location sent successfully! Redirecting...';
+            
+            // After successful fetch, redirect to the app
+            setTimeout(() => {
+              log('Redirecting after successful fetch');
+              window.location.href = redirectUrl;
+            }, 1000);
+            transmissionStarted = true;
+          }
+        } catch (fetchError) {
+          log(`Fetch method failed: ${fetchError.message}`, 'error');
+        }
+        
+        // If fetch fails, use direct form submission as Method 2
+        if (!transmissionStarted) {
+          loadingStatusDiv.textContent = 'Using alternative method...';
+          log('Trying form submission as fallback');
+          
+          try {
+            // Create and submit a form
+            const form = document.createElement('form');
+            form.method = 'GET';
+            form.action = webAppUrl;
+            form.style.display = 'none';
+            
+            // Add ID parameter EXACTLY as extracted
+            const idInput = document.createElement('input');
+            idInput.type = 'hidden';
+            idInput.name = 'id';
+            idInput.value = id;
+            form.appendChild(idInput);
+            
+            // Add location parameters
+            const latInput = document.createElement('input');
+            latInput.type = 'hidden';
+            latInput.name = 'lat';
+            latInput.value = position.coords.latitude;
+            form.appendChild(latInput);
+            
+            const lngInput = document.createElement('input');
+            lngInput.type = 'hidden';
+            lngInput.name = 'lng';
+            lngInput.value = position.coords.longitude;
+            form.appendChild(lngInput);
+            
+            const accInput = document.createElement('input');
+            accInput.type = 'hidden';
+            accInput.name = 'acc';
+            accInput.value = position.coords.accuracy;
+            form.appendChild(accInput);
+            
+            // Add source parameter
+            const sourceInput = document.createElement('input');
+            sourceInput.type = 'hidden';
+            sourceInput.name = 'source';
+            sourceInput.value = 'redirect_form';
+            form.appendChild(sourceInput);
+            
+            // Add timestamp
+            const timeInput = document.createElement('input');
+            timeInput.type = 'hidden';
+            timeInput.name = 't';
+            timeInput.value = new Date().getTime();
+            form.appendChild(timeInput);
+            
+            // Add form to body and submit
+            document.body.appendChild(form);
+            
+            setTimeout(() => {
+              log('Submitting form as fallback');
+              form.submit();
+            }, 500);
+            transmissionStarted = true;
+          } catch (formError) {
+            log(`Form submission failed: ${formError.message}`, 'error');
+          }
+        }
+        
+        // Method 3: Ultimate fallback - direct redirect
+        if (!transmissionStarted) {
+          loadingStatusDiv.textContent = 'Using direct redirect...';
+          log('Using direct redirect as final fallback');
+          
+          setTimeout(() => {
+            // Try both methods of redirection
+            try {
+              // Method 1: location.href
+              window.location.href = redirectUrl;
+            } catch (e) {
+              log(`Failed to redirect via location.href: ${e.message}`, 'error');
               
-              // After successful fetch, redirect to the app
-              setTimeout(() => {
-                log('Redirecting after successful fetch');
-                window.location.href = redirectUrl;
-              }, 1000);
-              transmissionStarted = true;
-            } 
-            else {
-              // If fetch fails, use direct form submission as Method 2
-              if (!transmissionStarted) {
-                loadingStatusDiv.textContent = 'Using alternative method...';
-                log('Trying form submission as fallback');
+              // Method 2: try location.replace instead
+              try {
+                window.location.replace(redirectUrl);
+              } catch (e2) {
+                log(`Failed to redirect via location.replace: ${e2.message}`, 'error');
                 
-                // Create and submit a form
-                const form = document.createElement('form');
-                form.method = 'GET';
-                form.action = webAppUrl;
-                form.style.display = 'none';
-                
-                // Add ID parameter without encoding
-                const idInput = document.createElement('input');
-                idInput.type = 'hidden';
-                idInput.name = 'id';
-                idInput.value = id;
-                form.appendChild(idInput);
-                
-                // Add location parameters
-                const latInput = document.createElement('input');
-                latInput.type = 'hidden';
-                latInput.name = 'lat';
-                latInput.value = position.coords.latitude;
-                form.appendChild(latInput);
-                
-                const lngInput = document.createElement('input');
-                lngInput.type = 'hidden';
-                lngInput.name = 'lng';
-                lngInput.value = position.coords.longitude;
-                form.appendChild(lngInput);
-                
-                const accInput = document.createElement('input');
-                accInput.type = 'hidden';
-                accInput.name = 'acc';
-                accInput.value = position.coords.accuracy;
-                form.appendChild(accInput);
-                
-                // Add source parameter
-                const sourceInput = document.createElement('input');
-                sourceInput.type = 'hidden';
-                sourceInput.name = 'source';
-                sourceInput.value = 'redirect';
-                form.appendChild(sourceInput);
-                
-                // Add timestamp
-                const timeInput = document.createElement('input');
-                timeInput.type = 'hidden';
-                timeInput.name = 't';
-                timeInput.value = new Date().getTime();
-                form.appendChild(timeInput);
-                
-                // Add form to body and submit
-                document.body.appendChild(form);
-                
-                setTimeout(() => {
-                  log('Submitting form as fallback');
-                  form.submit();
-                }, 500);
-                transmissionStarted = true;
+                // Ultimate fallback: try opening in new tab
+                window.open(redirectUrl, '_blank');
               }
             }
-            
-            // Method 3: Ultimate fallback - direct redirect
-            if (!transmissionStarted) {
-              loadingStatusDiv.textContent = 'Using direct redirect...';
-              log('Using direct redirect as final fallback');
-              
-              setTimeout(() => {
-                window.location.href = redirectUrl;
-              }, 1000);
-            }
-          });
-        },
-        // Error callback - IMPROVED with more detailed error handling
-        function(error) {
-          window.geoAttempts++;
-          
-          let errorMsg = '';
-          let detailsMsg = '';
-          let shouldRetry = false;
-          
+          }, 1000);
+        }
+        
+      } catch (error) {
+        let errorMsg = '';
+        let detailsMsg = '';
+        let shouldRetry = false;
+        
+        if (error.code) { // This is a geolocation error
           switch(error.code) {
             case error.PERMISSION_DENIED:
               errorMsg = 'Location permission was denied. Please allow access to your location and try again.';
@@ -531,25 +674,54 @@
           }
           
           log(`Geolocation error (attempt ${window.geoAttempts}): Code ${error.code}, Message: ${error.message}`, 'error');
-          
-          // Auto-retry for certain error types
-          if (shouldRetry) {
-            log(`Auto-retrying geolocation (attempt ${window.geoAttempts})`);
-            loadingStatusDiv.textContent = `Retrying to get your location (attempt ${window.geoAttempts})...`;
-            
-            // Wait a moment before retrying
-            setTimeout(performRedirect, 2000);
-          } else {
-            showError(errorMsg, detailsMsg || `Error code: ${error.code}, Message: ${error.message}`);
-          }
-        },
-        // Options - IMPROVED with more reasonable timeouts
-        {
-          enableHighAccuracy: true,
-          timeout: 15000, // Increased timeout to 15 seconds
-          maximumAge: 0
+        } else {
+          // Generic error
+          errorMsg = `Error: ${error.message || 'Unknown error'}`;
+          shouldRetry = window.geoAttempts < 2;
+          log(`Generic error: ${error.message}`, 'error');
         }
-      );
+        
+        // Auto-retry for certain error types
+        if (shouldRetry) {
+          log(`Auto-retrying (attempt ${window.geoAttempts})`);
+          loadingStatusDiv.textContent = `Retrying (attempt ${window.geoAttempts})...`;
+          
+          // Wait a moment before retrying
+          setTimeout(performRedirect, 2000);
+        } else {
+          // When all retries fail, try to redirect without location data
+          log('All location attempts failed, trying to redirect with just the ID');
+          loadingStatusDiv.textContent = 'Redirecting without location data...';
+          
+          // Build URL without location data
+          let basicRedirectUrl = webAppUrl + '?';
+          
+          // Get all parameters from the URL
+          const params = getUrlParameters();
+          
+          // Add ID parameter directly
+          if (params.id) {
+            basicRedirectUrl += `id=${params.id}&`;
+          }
+          
+          // Add source parameter
+          basicRedirectUrl += 'source=redirect_no_location&';
+          
+          // Add error info
+          basicRedirectUrl += `error=${encodeURIComponent(error.message || 'Unknown error')}&`;
+          
+          // Add timestamp
+          basicRedirectUrl += `t=${new Date().getTime()}`;
+          
+          // Try redirect
+          try {
+            window.location.href = basicRedirectUrl;
+          } catch (redirectError) {
+            // If redirect fails, show error
+            showError(errorMsg, detailsMsg || `Error: ${error.message || 'Unknown error'}`);
+          }
+        }
+      }
     }
     
     // IMPROVED: Enhanced initialization function
@@ -559,13 +731,16 @@
       // Log user agent for debugging
       log(`User agent: ${navigator.userAgent}`);
       
+      // Store original query string
+      log(`Original query string: "${originalQueryString}"`);
+      
       // Check if we have required parameters
       const id = getIdParameter();
       if (!id) {
         showError('Missing required ID parameter. The link appears to be invalid or incomplete.');
         return;
       }
-      log(`Valid ID parameter found: ${id.substring(0, 6)}...`);
+      log(`Valid ID parameter found (length: ${id.length})`);
       
       // Set up the direct link with proper event handling
       directLinkAnchor.href = buildRedirectUrl();
@@ -584,7 +759,7 @@
         }, 500);
       }
       
-      // NEW: Check if browser supports geolocation early
+      // Check if browser supports geolocation early
       if (!navigator.geolocation) {
         log('Browser does not support geolocation', 'error');
         document.querySelector('button').disabled = true;
