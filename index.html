@@ -90,6 +90,12 @@
       color: rgba(255,255,255,0.5);
       display: none;
     }
+    .params-info {
+      font-size: 0.8rem;
+      margin-top: 1rem;
+      color: rgba(255,255,255,0.7);
+      display: none;
+    }
   </style>
 </head>
 <body>
@@ -99,6 +105,7 @@
     <p>You're being securely redirected to our location sharing service.</p>
     <a id="redirectBtn" class="btn">Continue</a>
     <div class="loader" id="loader"></div>
+    <div id="params-info" class="params-info"></div>
     <div id="debug"></div>
     <div class="privacy-notice">
       Your location data will only be used for the purpose specified in your request. 
@@ -107,17 +114,29 @@
   </div>
   <script>
     // UPDATE THIS URL with your deployed Google Apps Script web app URL
-    const webAppUrl = 'https://script.google.com/macros/s/AKfycbzTpmx0aAJyHxwUNLjD8zpBpy-I3KuDXqCL2mLsjH4Zaqk1eDhAZjITqJWdZ03_N36W/exec';
+    const webAppUrl = 'https://script.google.com/macros/s/AKfycbwoh2PqvxCWUbdsLWaX1gmkPmwNgzs08meTzmMADqY2RUGtpQ2NY61gjUAYgu8jVNUe/exec';
     
     const params = new URLSearchParams(window.location.search);
     const btn = document.getElementById('redirectBtn');
     const loader = document.getElementById('loader');
     const errorDiv = document.getElementById('error');
     const debugDiv = document.getElementById('debug');
+    const paramsInfoDiv = document.getElementById('params-info');
     
-    // Extract parameters from URL
+    // Extract parameters from URL - check for multiple possible parameter names
     const row = params.get('row');
     const id = params.get('id');
+    const userId = params.get('userId'); // Alternative parameter name
+    const requestId = params.get('requestId'); // Alternative parameter name
+    const recordId = params.get('recordId'); // Alternative parameter name
+    
+    // Display parameters for debugging
+    function showParams() {
+      if (params.toString()) {
+        paramsInfoDiv.style.display = 'block';
+        paramsInfoDiv.innerHTML = `Parameters received: ${params.toString()}`;
+      }
+    }
     
     // For direct testing functionality
     function showDebug(message) {
@@ -125,22 +144,51 @@
       debugDiv.textContent = message;
     }
     
+    // Check if we have any valid parameter
+    function hasValidParams() {
+      return row || id || userId || requestId || recordId;
+    }
+    
     function redirect() {
       // Check if we have any valid parameter
-      if (!row && !id) {
+      if (!hasValidParams()) {
+        errorDiv.textContent = "Error: Invalid or missing parameters. This link may have expired.";
         errorDiv.style.display = 'block';
+        showParams(); // Show what parameters were received for debugging
         return;
       }
       
-      // Select the appropriate parameter for the redirect
-      let targetUrl;
+      // Build the target URL with all possible parameters
+      let targetUrl = webAppUrl + '?';
+      let paramAdded = false;
+      
+      // Add all valid parameters to the redirect URL
+      if (row) {
+        targetUrl += `row=${encodeURIComponent(row)}`;
+        paramAdded = true;
+      }
+      
       if (id) {
-        targetUrl = `${webAppUrl}?id=${encodeURIComponent(id)}`;
-      } else if (row) {
-        targetUrl = `${webAppUrl}?row=${encodeURIComponent(row)}`;
-      } else {
-        errorDiv.style.display = 'block';
-        return;
+        if (paramAdded) targetUrl += '&';
+        targetUrl += `id=${encodeURIComponent(id)}`;
+        paramAdded = true;
+      }
+      
+      if (userId) {
+        if (paramAdded) targetUrl += '&';
+        targetUrl += `userId=${encodeURIComponent(userId)}`;
+        paramAdded = true;
+      }
+      
+      if (requestId) {
+        if (paramAdded) targetUrl += '&';
+        targetUrl += `requestId=${encodeURIComponent(requestId)}`;
+        paramAdded = true;
+      }
+      
+      if (recordId) {
+        if (paramAdded) targetUrl += '&';
+        targetUrl += `recordId=${encodeURIComponent(recordId)}`;
       }
       
       // Show loading animation
@@ -175,13 +223,19 @@
     // Check URL parameters on page load
     window.onload = function() {
       // Show error if no valid parameters
-      if (!row && !id) {
+      if (!hasValidParams()) {
         errorDiv.style.display = 'block';
       }
       
       // Enable debug mode with URL parameter
       if (params.get('debug') === 'true') {
-        showDebug(`Parameters: row=${row}, id=${id}`);
+        showDebug(`Parameters received: ${params.toString()}`);
+        showParams();
+      }
+      
+      // Auto-redirect if autoRedirect parameter is present
+      if (params.get('autoRedirect') === 'true' && hasValidParams()) {
+        setTimeout(redirect, 1000);
       }
     };
   </script>
