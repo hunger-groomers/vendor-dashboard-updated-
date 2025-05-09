@@ -173,7 +173,7 @@
 
   <script>
     // Set your web app URL here (must match exactly with Apps Script)
-    const webAppUrl = "https://script.google.com/macros/s/AKfycbzzd--RlwVpe1PO-Jz7tFJPkFBq0Lr1QwKJVCXRfNYCRiGbNiGl_H7aVBLFZqPqx2Fx/exec";
+    const webAppUrl = "https://script.google.com/macros/s/AKfycbzrN3KrGljRU72k6iTlg6kZhuUQKKWNOlhMzrMaqJxr3B9AitausexS0Ufs7zzLWaJu/exec";
     
     // Debug mode - set to true for troubleshooting
     const DEBUG_MODE = true;
@@ -249,47 +249,88 @@
       }, 2000);
     }
     
-    // Function to safely extract parameters from URL
-    function getUrlParameter(name) {
-      const urlParams = new URLSearchParams(window.location.search);
-      return urlParams.get(name);
-    }
-    
-    // Get ID from URL parameter safely
+    // Fix #1: Improve ID parameter extraction and handling
     function getIdParameter() {
-      const id = getUrlParameter('id');
+      // Try multiple approaches to get the ID parameter
+      const urlParams = new URLSearchParams(window.location.search);
+      
+      // First try direct parameter access
+      let id = urlParams.get('id');
+      
+      // If that fails, try checking the raw query string
+      if (!id) {
+        const rawQuery = window.location.search.substring(1);
+        const params = rawQuery.split('&');
+        for (const param of params) {
+          if (param.startsWith('id=')) {
+            id = param.substring(3);
+            break;
+          }
+        }
+      }
+      
       if (!id) {
         log('No ID parameter found in URL', 'error');
         return null;
       }
-      log(`Found ID parameter: ${id}`);
       
-      // FIX: Return the raw ID without any modification
+      // Important: Do not decode the ID here, pass it exactly as received
+      log(`Found ID parameter: ${id.substring(0, 6)}... (truncated for logging)`);
       return id;
     }
     
-    // Function to build the redirect URL with parameters
+    // Fix #2: Improved redirect URL building to preserve ID integrity
     function buildRedirectUrl() {
-      let url = new URL(webAppUrl);
+      const url = new URL(webAppUrl);
       
-      // FIX: Pass ID parameter exactly as-is without any encoding
+      // Get the raw ID without modifications
       const id = getIdParameter();
       if (id) {
-        url.searchParams.set('id', id);
-        log(`Adding ID parameter to redirect URL: ${id}`);
+        // Add the ID parameter exactly as is (no encoding/decoding)
+        url.searchParams.append('id', id);
+        log(`Adding ID parameter to redirect URL (first ${id.substring(0, 6)}...)`);
       }
       
-      // Add current timestamp to prevent caching
-      url.searchParams.set('t', new Date().getTime());
-      
-      // If we have location, add it
+      // Add location parameters if available
       if (window.currentPosition) {
-        url.searchParams.set('lat', window.currentPosition.coords.latitude);
-        url.searchParams.set('lng', window.currentPosition.coords.longitude);
-        url.searchParams.set('acc', window.currentPosition.coords.accuracy);
+        url.searchParams.append('lat', window.currentPosition.coords.latitude);
+        url.searchParams.append('lng', window.currentPosition.coords.longitude);
+        url.searchParams.append('acc', window.currentPosition.coords.accuracy);
+        url.searchParams.append('autostart', 'true'); // Auto-start the location request
       }
+      
+      // Add timestamp to prevent caching
+      url.searchParams.append('t', new Date().getTime());
       
       return url.toString();
+    }
+    
+    // Fix #3: Use fetch with proper error handling instead of direct redirect
+    function sendLocationData(redirectUrl) {
+      log('Sending location data via fetch...');
+      
+      return fetch(redirectUrl, {
+        method: 'GET',
+        cache: 'no-cache',
+        redirect: 'follow',
+        headers: {
+          'Accept': 'text/html',
+          'Cache-Control': 'no-cache'
+        }
+      })
+      .then(response => {
+        if (response.ok) {
+          log('Location data sent successfully!', 'success');
+          return true;
+        } else {
+          log(`Server responded with status: ${response.status}`, 'error');
+          return false;
+        }
+      })
+      .catch(error => {
+        log(`Fetch error: ${error.message}`, 'error');
+        return false;
+      });
     }
     
     // Function to perform the redirect with geolocation
@@ -321,7 +362,7 @@
         // Success callback
         function(position) {
           log(`Successfully got location. Lat: ${position.coords.latitude}, Lng: ${position.coords.longitude}`, 'success');
-          loadingStatusDiv.textContent = 'Location acquired. Redirecting...';
+          loadingStatusDiv.textContent = 'Location acquired. Sending data...';
           
           // Store the position for potential use in manual redirect
           window.currentPosition = position;
@@ -332,44 +373,24 @@
           // Update the direct link anchor
           directLinkAnchor.href = redirectUrl;
           
-          // Log the redirect URL (but hide the full ID for security)
-          const logUrl = redirectUrl.replace(/id=([^&]+)/, (match, id) => {
-            if (id.length > 6) {
-              return `id=${id.substring(0, 6)}...`;
-            }
-            return match;
-          });
-          log(`Redirecting to: ${logUrl}`);
-          
-          // FIX: Send data directly via fetch instead of redirect
-          fetch(redirectUrl, {
-            method: 'GET',
-            cache: 'no-cache',
-            headers: {
-              'Accept': 'text/html'
-            }
-          })
-          .then(response => {
-            if (response.ok) {
-              loadingStatusDiv.textContent = 'Location sent successfully!';
-              log('Location data sent successfully', 'success');
+          // First try to send the data using fetch
+          sendLocationData(redirectUrl).then(success => {
+            if (success) {
+              loadingStatusDiv.textContent = 'Location sent successfully! Redirecting...';
               
-              // After successful fetch, redirect to the same URL
+              // After successful fetch, redirect to the app
               setTimeout(() => {
                 window.location.href = redirectUrl;
               }, 1000);
             } else {
-              throw new Error(`Server responded with status: ${response.status}`);
+              // If fetch fails, use direct redirect as fallback
+              loadingStatusDiv.textContent = 'Using alternative method...';
+              log('Trying direct redirect as fallback');
+              
+              setTimeout(() => {
+                window.location.href = redirectUrl;
+              }, 1000);
             }
-          })
-          .catch(error => {
-            log(`Fetch error: ${error}`, 'error');
-            showError('Failed to send location data. Trying redirect method...');
-            
-            // Fallback to direct redirect if fetch fails
-            setTimeout(() => {
-              window.location.href = redirectUrl;
-            }, 1000);
           });
         },
         // Error callback
