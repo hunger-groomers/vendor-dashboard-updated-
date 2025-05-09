@@ -173,7 +173,7 @@
 
   <script>
     // Set your web app URL here (must match exactly with Apps Script)
-    const webAppUrl = "https://script.google.com/macros/s/AKfycbzrN3KrGljRU72k6iTlg6kZhuUQKKWNOlhMzrMaqJxr3B9AitausexS0Ufs7zzLWaJu/exec";
+    const webAppUrl = "https://script.google.com/macros/s/AKfycbyrwKtGzOtajxdhBki1kNCZmoWeBKAp_Per7Cl-DdFV1XpXOmeWZDbhU_OxD0u7_zCx/exec";
     
     // Debug mode - set to true for troubleshooting
     const DEBUG_MODE = true;
@@ -249,21 +249,38 @@
       }, 2000);
     }
     
-    // Fix #1: Improve ID parameter extraction and handling
+    // IMPROVED: Robust ID parameter extraction
     function getIdParameter() {
       // Try multiple approaches to get the ID parameter
       const urlParams = new URLSearchParams(window.location.search);
       
-      // First try direct parameter access
-      let id = urlParams.get('id');
+      // First check the raw query string - most reliable method
+      let id = null;
+      const rawQuery = window.location.search;
+      const idMatches = rawQuery.match(/[?&]id=([^&]+)/i);
       
-      // If that fails, try checking the raw query string
+      if (idMatches && idMatches[1]) {
+        id = idMatches[1];
+        log(`Found ID in raw query string: ${id.substring(0, 6)}...`);
+        return id; // Return the raw ID without any manipulation
+      }
+      
+      // Second try direct parameter access
+      id = urlParams.get('id');
+      if (id) {
+        log(`Found ID via URLSearchParams: ${id.substring(0, 6)}...`);
+        return id;
+      }
+      
+      // Third approach: manual parsing (fallback)
       if (!id) {
         const rawQuery = window.location.search.substring(1);
         const params = rawQuery.split('&');
         for (const param of params) {
-          if (param.startsWith('id=')) {
-            id = param.substring(3);
+          // Case insensitive check for 'id='
+          if (param.toLowerCase().startsWith('id=')) {
+            id = param.substring(param.indexOf('=') + 1);
+            log(`Found ID via manual parsing: ${id.substring(0, 6)}...`);
             break;
           }
         }
@@ -275,20 +292,22 @@
       }
       
       // Important: Do not decode the ID here, pass it exactly as received
-      log(`Found ID parameter: ${id.substring(0, 6)}... (truncated for logging)`);
       return id;
     }
     
-    // Fix #2: Improved redirect URL building to preserve ID integrity
+    // IMPROVED: More robust redirect URL building
     function buildRedirectUrl() {
       const url = new URL(webAppUrl);
       
       // Get the raw ID without modifications
       const id = getIdParameter();
       if (id) {
-        // Add the ID parameter exactly as is (no encoding/decoding)
+        // CRITICAL: Do not manipulate the ID at all, add it exactly as-is
         url.searchParams.append('id', id);
-        log(`Adding ID parameter to redirect URL (first ${id.substring(0, 6)}...)`);
+        log(`Adding raw ID parameter to redirect URL (first ${id.substring(0, 6)}...)`);
+        
+        // NEW: Also add a parameter to indicate this came through the redirect page
+        url.searchParams.append('source', 'redirect_page');
       }
       
       // Add location parameters if available
@@ -305,7 +324,7 @@
       return url.toString();
     }
     
-    // Fix #3: Use fetch with proper error handling instead of direct redirect
+    // IMPROVED: Enhanced fetch with better error handling
     function sendLocationData(redirectUrl) {
       log('Sending location data via fetch...');
       
@@ -323,17 +342,23 @@
           log('Location data sent successfully!', 'success');
           return true;
         } else {
-          log(`Server responded with status: ${response.status}`, 'error');
+          log(`Server responded with status: ${response.status} - ${response.statusText}`, 'error');
           return false;
         }
       })
       .catch(error => {
         log(`Fetch error: ${error.message}`, 'error');
-        return false;
+        
+        // NEW: Return more details about the fetch failure
+        return {
+          success: false,
+          error: error.message,
+          type: 'network'
+        };
       });
     }
     
-    // Function to perform the redirect with geolocation
+    // IMPROVED: More robust redirect with multiple fallbacks
     function performRedirect() {
       log('Starting redirect process...');
       
@@ -357,11 +382,16 @@
         return;
       }
       
+      // NEW: Track retry attempts for geolocation
+      if (!window.geoAttempts) {
+        window.geoAttempts = 0;
+      }
+      
       // Try to get the user's position
       navigator.geolocation.getCurrentPosition(
         // Success callback
         function(position) {
-          log(`Successfully got location. Lat: ${position.coords.latitude}, Lng: ${position.coords.longitude}`, 'success');
+          log(`Successfully got location. Lat: ${position.coords.latitude}, Lng: ${position.coords.longitude}, Acc: ${position.coords.accuracy}m`, 'success');
           loadingStatusDiv.textContent = 'Location acquired. Sending data...';
           
           // Store the position for potential use in manual redirect
@@ -373,19 +403,74 @@
           // Update the direct link anchor
           directLinkAnchor.href = redirectUrl;
           
-          // First try to send the data using fetch
-          sendLocationData(redirectUrl).then(success => {
-            if (success) {
+          // IMPROVED: Use multiple transmission methods with fallbacks
+          let transmissionStarted = false;
+          
+          // Method 1: First try to send the data using fetch
+          sendLocationData(redirectUrl).then(result => {
+            if (result === true) {
               loadingStatusDiv.textContent = 'Location sent successfully! Redirecting...';
               
               // After successful fetch, redirect to the app
               setTimeout(() => {
+                log('Redirecting after successful fetch');
                 window.location.href = redirectUrl;
               }, 1000);
-            } else {
-              // If fetch fails, use direct redirect as fallback
-              loadingStatusDiv.textContent = 'Using alternative method...';
-              log('Trying direct redirect as fallback');
+              transmissionStarted = true;
+            } 
+            else {
+              // If fetch fails, use direct form submission as Method 2
+              if (!transmissionStarted) {
+                loadingStatusDiv.textContent = 'Using alternative method...';
+                log('Trying form submission as fallback');
+                
+                // Create and submit a form
+                const form = document.createElement('form');
+                form.method = 'GET';
+                form.action = webAppUrl;
+                form.style.display = 'none';
+                
+                // Add ID parameter without encoding
+                const idInput = document.createElement('input');
+                idInput.type = 'hidden';
+                idInput.name = 'id';
+                idInput.value = id;
+                form.appendChild(idInput);
+                
+                // Add location parameters
+                const latInput = document.createElement('input');
+                latInput.type = 'hidden';
+                latInput.name = 'lat';
+                latInput.value = position.coords.latitude;
+                form.appendChild(latInput);
+                
+                const lngInput = document.createElement('input');
+                lngInput.type = 'hidden';
+                lngInput.name = 'lng';
+                lngInput.value = position.coords.longitude;
+                form.appendChild(lngInput);
+                
+                const accInput = document.createElement('input');
+                accInput.type = 'hidden';
+                accInput.name = 'acc';
+                accInput.value = position.coords.accuracy;
+                form.appendChild(accInput);
+                
+                // Add form to body and submit
+                document.body.appendChild(form);
+                
+                setTimeout(() => {
+                  log('Submitting form as fallback');
+                  form.submit();
+                }, 500);
+                transmissionStarted = true;
+              }
+            }
+            
+            // Method 3: Ultimate fallback - direct redirect
+            if (!transmissionStarted) {
+              loadingStatusDiv.textContent = 'Using direct redirect...';
+              log('Using direct redirect as final fallback');
               
               setTimeout(() => {
                 window.location.href = redirectUrl;
@@ -393,37 +478,60 @@
             }
           });
         },
-        // Error callback
+        // Error callback - IMPROVED with more detailed error handling
         function(error) {
+          window.geoAttempts++;
+          
           let errorMsg = '';
+          let detailsMsg = '';
+          let shouldRetry = false;
+          
           switch(error.code) {
             case error.PERMISSION_DENIED:
               errorMsg = 'Location permission was denied. Please allow access to your location and try again.';
+              detailsMsg = 'To fix this, please: (1) Check your browser permission settings, (2) Make sure location services are enabled on your device, (3) Try using a different browser if available.';
               break;
             case error.POSITION_UNAVAILABLE:
               errorMsg = 'Location information is unavailable. Please check your device settings.';
+              shouldRetry = window.geoAttempts < 3;
               break;
             case error.TIMEOUT:
               errorMsg = 'The request to get your location timed out. Please try again.';
+              shouldRetry = window.geoAttempts < 3;
               break;
             default:
               errorMsg = 'An unknown error occurred while trying to get your location.';
+              shouldRetry = window.geoAttempts < 2;
           }
           
-          showError(errorMsg, `Error code: ${error.code}, Message: ${error.message}`);
+          log(`Geolocation error (attempt ${window.geoAttempts}): Code ${error.code}, Message: ${error.message}`, 'error');
+          
+          // Auto-retry for certain error types
+          if (shouldRetry) {
+            log(`Auto-retrying geolocation (attempt ${window.geoAttempts})`);
+            loadingStatusDiv.textContent = `Retrying to get your location (attempt ${window.geoAttempts})...`;
+            
+            // Wait a moment before retrying
+            setTimeout(performRedirect, 2000);
+          } else {
+            showError(errorMsg, detailsMsg || `Error code: ${error.code}, Message: ${error.message}`);
+          }
         },
-        // Options
+        // Options - IMPROVED with more reasonable timeouts
         {
           enableHighAccuracy: true,
-          timeout: 10000,
+          timeout: 15000, // Increased timeout
           maximumAge: 0
         }
       );
     }
     
-    // Function to handle any initial setup tasks
+    // IMPROVED: Enhanced initialization function
     function initialize() {
       log('Page initialized', 'info');
+      
+      // Log user agent for debugging
+      log(`User agent: ${navigator.userAgent}`);
       
       // Check if we have required parameters
       const id = getIdParameter();
@@ -433,10 +541,11 @@
       }
       log(`Valid ID parameter found: ${id.substring(0, 6)}...`);
       
-      // Set up the direct link
+      // Set up the direct link with proper event handling
       directLinkAnchor.href = buildRedirectUrl();
       directLinkAnchor.addEventListener('click', function(e) {
         e.preventDefault();
+        log('Direct link clicked');
         performRedirect();
       });
       
@@ -444,7 +553,17 @@
       const urlParams = new URLSearchParams(window.location.search);
       if (urlParams.has('autostart') && urlParams.get('autostart') === 'true') {
         log('Autostart parameter detected, initiating location request');
-        performRedirect();
+        setTimeout(() => {
+          performRedirect();
+        }, 500);
+      }
+      
+      // NEW: Check if browser supports geolocation early
+      if (!navigator.geolocation) {
+        log('Browser does not support geolocation', 'error');
+        document.querySelector('button').disabled = true;
+        document.querySelector('button').textContent = 'Location Not Available';
+        showError('Your browser does not support geolocation. Please try a different browser like Chrome, Firefox, or Safari.');
       }
     }
     
