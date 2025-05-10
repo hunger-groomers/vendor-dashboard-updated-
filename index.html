@@ -114,7 +114,7 @@
   </div>
   <script>
     // UPDATE THIS URL with your deployed Google Apps Script web app URL
-    const webAppUrl = 'https://script.google.com/macros/s/AKfycbwoh2PqvxCWUbdsLWaX1gmkPmwNgzs08meTzmMADqY2RUGtpQ2NY61gjUAYgu8jVNUe/exec';
+    const webAppUrl = 'https://script.google.com/macros/s/AKfycbzFG4U1Z257cOYP_CiSo4X9qfAdsXzjgqmQj7-NPDvlRXlyyCpTMGGVZpyB6xYmo8Nu/exec';
     
     const params = new URLSearchParams(window.location.search);
     const btn = document.getElementById('redirectBtn');
@@ -125,16 +125,22 @@
     
     // Extract parameters from URL - check for multiple possible parameter names
     const row = params.get('row');
-    const id = params.get('id');
+    let id = params.get('id');
     const userId = params.get('userId'); // Alternative parameter name
     const requestId = params.get('requestId'); // Alternative parameter name
     const recordId = params.get('recordId'); // Alternative parameter name
+    
+    // Ensure the ID doesn't have any encoding issues or whitespace
+    if (id) {
+      // Clean the ID parameter - trim whitespace and ensure proper encoding
+      id = id.trim();
+    }
     
     // Display parameters for debugging
     function showParams() {
       if (params.toString()) {
         paramsInfoDiv.style.display = 'block';
-        paramsInfoDiv.innerHTML = `Parameters received: ${params.toString()}`;
+        paramsInfoDiv.innerHTML = `Parameters received: ${params.toString()}<br>Cleaned ID: ${id || 'none'}`;
       }
     }
     
@@ -158,37 +164,28 @@
         return;
       }
       
-      // Build the target URL with all possible parameters
-      let targetUrl = webAppUrl + '?';
-      let paramAdded = false;
+      // Build the target URL - start fresh to avoid any URL encoding issues
+      let targetUrl = new URL(webAppUrl);
       
-      // Add all valid parameters to the redirect URL
+      // Add all valid parameters to the URL using URLSearchParams for proper encoding
       if (row) {
-        targetUrl += `row=${encodeURIComponent(row)}`;
-        paramAdded = true;
+        targetUrl.searchParams.append('row', row);
       }
       
       if (id) {
-        if (paramAdded) targetUrl += '&';
-        targetUrl += `id=${encodeURIComponent(id)}`;
-        paramAdded = true;
+        targetUrl.searchParams.append('id', id);
       }
       
       if (userId) {
-        if (paramAdded) targetUrl += '&';
-        targetUrl += `userId=${encodeURIComponent(userId)}`;
-        paramAdded = true;
+        targetUrl.searchParams.append('userId', userId);
       }
       
       if (requestId) {
-        if (paramAdded) targetUrl += '&';
-        targetUrl += `requestId=${encodeURIComponent(requestId)}`;
-        paramAdded = true;
+        targetUrl.searchParams.append('requestId', requestId);
       }
       
       if (recordId) {
-        if (paramAdded) targetUrl += '&';
-        targetUrl += `recordId=${encodeURIComponent(recordId)}`;
+        targetUrl.searchParams.append('recordId', recordId);
       }
       
       // Show loading animation
@@ -196,17 +193,17 @@
       btn.style.display = 'none';
       
       // For debugging
-      showDebug(`Redirecting to: ${targetUrl}`);
+      showDebug(`Redirecting to: ${targetUrl.toString()}`);
       
       // Perform redirect after a short delay
       setTimeout(() => {
         try {
           // Open in same window/tab
-          window.location.href = targetUrl;
+          window.location.href = targetUrl.toString();
           
           // Alternative method if the above doesn't work
           setTimeout(() => {
-            window.location.replace(targetUrl);
+            window.location.replace(targetUrl.toString());
           }, 500);
         } catch (e) {
           errorDiv.style.display = 'block';
