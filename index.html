@@ -55,6 +55,11 @@
       background: #ffd54f;
       transform: translateY(-2px);
     }
+    .btn:disabled {
+      background: #cccccc;
+      cursor: not-allowed;
+      transform: none;
+    }
     .loader {
       border: 4px solid rgba(255,255,255,0.3);
       border-top: 4px solid #fff;
@@ -62,7 +67,7 @@
       width: 40px;
       height: 40px;
       animation: spin 1s linear infinite;
-      margin-top: 1.5rem;
+      margin: 1.5rem auto;
       display: none;
     }
     @keyframes spin {
@@ -84,28 +89,58 @@
       margin-bottom: 1.5rem;
       display: none;
     }
+    .success {
+      background: rgba(52, 199, 89, 0.2);
+      color: #fff;
+      padding: 1rem;
+      border-radius: 8px;
+      margin-bottom: 1.5rem;
+      display: none;
+    }
+    #status {
+      margin-bottom: 1rem;
+    }
+    #accuracy {
+      display: block;
+      font-size: 0.9rem;
+      margin: 1rem 0;
+      opacity: 0.8;
+    }
+    .progress {
+      width: 100%;
+      height: 8px;
+      background: rgba(255,255,255,0.2);
+      border-radius: 4px;
+      margin: 1rem 0;
+      overflow: hidden;
+      display: none;
+    }
+    .progress-bar {
+      height: 100%;
+      width: 0%;
+      background: #ffca28;
+      transition: width 0.3s ease;
+    }
     #debug {
       font-size: 0.7rem;
       margin-top: 1rem;
       color: rgba(255,255,255,0.5);
       display: none;
     }
-    .params-info {
-      font-size: 0.8rem;
-      margin-top: 1rem;
-      color: rgba(255,255,255,0.7);
-      display: none;
-    }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>📍 Secure Location Sharing</h1>
-    <div id="error" class="error">Invalid link: missing or incorrect parameters.</div>
-    <p>You're being securely redirected to our location sharing service.</p>
-    <a id="redirectBtn" class="btn">Continue</a>
+    <h1>📍 Share Your Location</h1>
+    <div id="error" class="error"></div>
+    <div id="success" class="success"></div>
+    <p id="status">Please click the button below to share your location.</p>
+    <div class="progress" id="progress">
+      <div class="progress-bar" id="progressBar"></div>
+    </div>
+    <span id="accuracy"></span>
+    <button id="shareBtn" class="btn">Share My Location</button>
     <div class="loader" id="loader"></div>
-    <div id="params-info" class="params-info"></div>
     <div id="debug"></div>
     <div class="privacy-notice">
       Your location data will only be used for the purpose specified in your request. 
@@ -114,52 +149,56 @@
   </div>
   <script>
     // UPDATE THIS URL with your deployed Google Apps Script web app URL
-    const webAppUrl = 'https://script.google.com/macros/s/AKfycbzFG8bJS_29xs2hDl5Ka0ftIkdo8_YRGcxQTUjzNOMmCIcGi6KMJh1NMQ2ZoGCGj1oc/exec';
+    const webAppUrl = 'https://script.google.com/macros/s/AKfycbwFxla96Q1Go_hUhPS2EgUEmdfTZ0iaytTUeNSv0-GkTcDMoABz3rsU95dqPmLLXRI/exec';
     
-    // Function to get raw query parameters without URL parsing which can cause encoding changes
-    function getRawQueryParams() {
-      const queryStr = window.location.search.substring(1); // Remove the leading '?'
-      return queryStr;
-    }
-
-    // Get both parsed and raw parameters
-    const params = new URLSearchParams(window.location.search);
-    const rawQueryString = getRawQueryParams();
-    
-    const btn = document.getElementById('redirectBtn');
+    // Elements
+    const shareBtn = document.getElementById('shareBtn');
     const loader = document.getElementById('loader');
     const errorDiv = document.getElementById('error');
+    const successDiv = document.getElementById('success');
+    const statusEl = document.getElementById('status');
+    const accuracyEl = document.getElementById('accuracy');
     const debugDiv = document.getElementById('debug');
-    const paramsInfoDiv = document.getElementById('params-info');
+    const progress = document.getElementById('progress');
+    const progressBar = document.getElementById('progressBar');
     
-    // Extract parameters from URL - check for multiple possible parameter names
+    // Get URL parameters
+    const params = new URLSearchParams(window.location.search);
+    
+    // Extract parameters - check for multiple possible parameter names
     const row = params.get('row');
     const id = params.get('id');
     const userId = params.get('userId');
     const requestId = params.get('requestId');
     const recordId = params.get('recordId');
     
-    // For debugging
-    const debug = false;
+    // For debugging 
+    const DEBUG_MODE = false;
     
-    // Display parameters for debugging
-    function showParams() {
-      if (params.toString()) {
-        paramsInfoDiv.style.display = 'block';
-        paramsInfoDiv.innerHTML = `Parameters received: ${params.toString()}<br>
-                                   Raw query string: ${rawQueryString}<br>
-                                   ID: ${id || 'none'}<br>
-                                   UserId: ${userId || 'none'}<br>
-                                   RequestId: ${requestId || 'none'}<br>
-                                   RecordId: ${recordId || 'none'}`;
+    function showDebug(message) {
+      if (DEBUG_MODE) {
+        debugDiv.style.display = 'block';
+        debugDiv.textContent += message + '\n';
       }
     }
     
-    function showDebug(message) {
-      if (debug) {
-        debugDiv.style.display = 'block';
-        debugDiv.textContent = message;
-      }
+    function showError(message) {
+      errorDiv.textContent = message;
+      errorDiv.style.display = 'block';
+      loader.style.display = 'none';
+      shareBtn.disabled = false;
+    }
+    
+    function showSuccess(message) {
+      successDiv.textContent = message;
+      successDiv.style.display = 'block';
+      loader.style.display = 'none';
+      shareBtn.style.display = 'none';
+    }
+    
+    function updateProgress(step, total) {
+      progress.style.display = 'block';
+      progressBar.style.width = Math.round((step/total) * 100) + '%';
     }
     
     // Check if we have any valid parameter
@@ -167,62 +206,146 @@
       return row || id || userId || requestId || recordId;
     }
     
-    function redirect() {
-      // Check if we have any valid parameter
+    // Get the parameter to use
+    function getIdentifierParam() {
+      // Create an object to store all available parameters
+      const availableParams = {};
+      
+      if (row) availableParams.row = row;
+      if (id) availableParams.id = id;
+      if (userId) availableParams.userId = userId;
+      if (requestId) availableParams.requestId = requestId;
+      if (recordId) availableParams.recordId = recordId;
+      
+      return availableParams;
+    }
+    
+    function getLocation() {
+      // Check if we have valid parameters
       if (!hasValidParams()) {
-        errorDiv.textContent = "Error: Invalid or missing parameters. This link may have expired.";
-        errorDiv.style.display = 'block';
-        showParams(); // Show what parameters were received for debugging
+        showError("Error: Invalid or missing parameters. This link may have expired.");
         return;
       }
       
-      // Show loading animation
+      // Disable button and show loader
+      shareBtn.disabled = true;
       loader.style.display = 'block';
-      btn.style.display = 'none';
+      statusEl.textContent = 'Requesting your location...';
+      updateProgress(1, 4);
       
-      // Use the raw query string to preserve exact parameter format
-      const targetUrl = `${webAppUrl}?${rawQueryString}`;
+      // Check if geolocation is supported
+      if (!navigator.geolocation) {
+        showError('Geolocation is not supported by your browser.');
+        return;
+      }
       
-      showDebug(`Redirecting to: ${targetUrl}`);
+      const options = {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0
+      };
       
-      // Perform redirect after a short delay
-      setTimeout(() => {
-        try {
-          // Open in same window/tab
-          window.location.href = targetUrl;
+      navigator.geolocation.getCurrentPosition(
+        function(position) {
+          // Location obtained successfully
+          statusEl.textContent = 'Location found! Processing...';
+          updateProgress(2, 4);
           
-          // Alternative method if the above doesn't work
-          setTimeout(() => {
-            window.location.replace(targetUrl);
-          }, 500);
-        } catch (e) {
-          errorDiv.style.display = 'block';
-          errorDiv.textContent = "Redirect failed: " + e.message;
-          btn.style.display = 'inline-block';
-          loader.style.display = 'none';
-        }
-      }, 800);
+          // Show accuracy
+          const accuracyInMeters = Math.round(position.coords.accuracy);
+          accuracyEl.textContent = 'Accuracy: ' + accuracyInMeters + ' meters';
+          
+          // Now send location data to Google Apps Script
+          sendLocationToGAS(position);
+        },
+        function(err) {
+          // Handle errors
+          let errorMsg = 'Location sharing failed.';
+          
+          switch(err.code) {
+            case err.PERMISSION_DENIED:
+              errorMsg = 'You denied permission to access your location.';
+              break;
+            case err.POSITION_UNAVAILABLE:
+              errorMsg = 'Location information is unavailable.';
+              break;
+            case err.TIMEOUT:
+              errorMsg = 'Request timed out. Please try again.';
+              break;
+          }
+          
+          showError(errorMsg);
+        },
+        options
+      );
+    }
+    
+    function sendLocationToGAS(position) {
+      statusEl.textContent = 'Sending location data...';
+      updateProgress(3, 4);
+      
+      const latitude = position.coords.latitude;
+      const longitude = position.coords.longitude;
+      const accuracy = position.coords.accuracy;
+      
+      // Get all our parameters
+      const idParams = getIdentifierParam();
+      
+      // Prepare the URL with parameters
+      let url = `${webAppUrl}?lat=${latitude}&lng=${longitude}&accuracy=${accuracy}`;
+      
+      // Add all available identifier parameters
+      for (const [key, value] of Object.entries(idParams)) {
+        url += `&${key}=${encodeURIComponent(value)}`;
+      }
+      
+      showDebug('Sending to: ' + url);
+      
+      // Use fetch API to send the data
+      fetch(url)
+        .then(response => {
+          if (!response.ok) {
+            throw new Error('Network response was not ok: ' + response.status);
+          }
+          return response.text();
+        })
+        .then(html => {
+          updateProgress(4, 4);
+          
+          // Check if the response contains error indicators
+          if (html.includes('Invalid or missing parameters') || 
+              html.includes('Error:') || 
+              html.includes('error-box')) {
+            throw new Error('Server reported an error with parameters');
+          }
+          
+          // Success!
+          showSuccess('✅ Thank you! Your location has been successfully recorded.');
+          statusEl.textContent = 'Location successfully shared.';
+        })
+        .catch(error => {
+          showError('Error sending location: ' + error.message);
+          showDebug('Error details: ' + error);
+        });
     }
     
     // Attach click handler to button
-    btn.addEventListener('click', redirect);
+    shareBtn.addEventListener('click', getLocation);
     
     // Check URL parameters on page load
     window.onload = function() {
-      // Show parameters during troubleshooting if debug is enabled
-      if (debug) {
-        showDebug(`Parameters received: ${params.toString()}`);
-        showParams();
+      if (DEBUG_MODE) {
+        showDebug(`Parameters: ${JSON.stringify(Object.fromEntries(params))}`);
       }
       
       // Show error if no valid parameters
       if (!hasValidParams()) {
-        errorDiv.style.display = 'block';
+        showError("Error: Invalid or missing parameters. This link may have expired.");
       }
       
-      // Auto-redirect if autoRedirect parameter is present
-      if (params.get('autoRedirect') === 'true' && hasValidParams()) {
-        setTimeout(redirect, 1000);
+      // Auto-location if autoShare parameter is present
+      if (params.get('autoShare') === 'true' && hasValidParams()) {
+        setTimeout(getLocation, 1000);
       }
     };
   </script>
