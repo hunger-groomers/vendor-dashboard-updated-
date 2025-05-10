@@ -114,9 +114,20 @@
   </div>
   <script>
     // UPDATE THIS URL with your deployed Google Apps Script web app URL
-    const webAppUrl = 'https://script.google.com/macros/s/AKfycbxXeqeoyiAtuVKm9vPyx4UJtY7HdPEz4LRW6B0HV_fF37lRee7vxIboLdX1XEiGCv3-/exec';
+    const webAppUrl = 'https://script.google.com/macros/s/AKfycbw-Oqe2ilrUHRKoWRqVLcUO0FBRvIxtYdSSCSJYO6MZt6Lu_iCtq_hFIBMIndtPEBDS/exec';
     
+    // SOLUTION: Use the raw query string to preserve exact parameter format
+const targetUrl = `${webAppUrl}?${rawQueryString}`;
+    // Function to get raw query parameters without URL parsing which can cause encoding changes
+    function getRawQueryParams() {
+      const queryStr = window.location.search.substring(1); // Remove the leading '?'
+      return queryStr;
+    }
+
+    // Get both parsed and raw parameters
     const params = new URLSearchParams(window.location.search);
+    const rawQueryString = getRawQueryParams();
+    
     const btn = document.getElementById('redirectBtn');
     const loader = document.getElementById('loader');
     const errorDiv = document.getElementById('error');
@@ -126,21 +137,19 @@
     // Extract parameters from URL - check for multiple possible parameter names
     const row = params.get('row');
     let id = params.get('id');
-    const userId = params.get('userId'); // Alternative parameter name
-    const requestId = params.get('requestId'); // Alternative parameter name
-    const recordId = params.get('recordId'); // Alternative parameter name
+    const userId = params.get('userId');
+    const requestId = params.get('requestId');
+    const recordId = params.get('recordId');
     
-    // For debugging - IMPORTANT: Enable this during troubleshooting
-    const debug = true;
-    
-    // Ensure the ID doesn't have any encoding issues
-    // FIXED: Don't try to clean or modify the ID - pass it exactly as received
+    // For debugging
+    const debug = false;
     
     // Display parameters for debugging
     function showParams() {
       if (params.toString()) {
         paramsInfoDiv.style.display = 'block';
         paramsInfoDiv.innerHTML = `Parameters received: ${params.toString()}<br>
+                                   Raw query string: ${rawQueryString}<br>
                                    ID: ${id || 'none'}<br>
                                    UserId: ${userId || 'none'}<br>
                                    RequestId: ${requestId || 'none'}<br>
@@ -148,7 +157,6 @@
       }
     }
     
-    // For direct testing functionality
     function showDebug(message) {
       if (debug) {
         debugDiv.style.display = 'block';
@@ -170,51 +178,26 @@
         return;
       }
       
-      // Build the target URL - start fresh to avoid any URL encoding issues
-      let targetUrl = new URL(webAppUrl);
-      
-      // FIXED: Preserve the exact parameter value without modification
-      // Add all valid parameters to the URL using URLSearchParams for proper encoding
-      if (row) {
-        targetUrl.searchParams.append('row', row);
-      }
-      
-      if (id) {
-        // FIXED: Pass the ID exactly as received, let the server handle decoding
-        targetUrl.searchParams.append('id', id);
-      }
-      
-      if (userId) {
-        targetUrl.searchParams.append('userId', userId);
-      }
-      
-      if (requestId) {
-        targetUrl.searchParams.append('requestId', requestId);
-      }
-      
-      if (recordId) {
-        targetUrl.searchParams.append('recordId', recordId);
-      }
-      
-      // Always add debug mode when redirecting
-      targetUrl.searchParams.append('debug', 'true');
-      
       // Show loading animation
       loader.style.display = 'block';
       btn.style.display = 'none';
       
-      // For debugging
-      showDebug(`Redirecting to: ${targetUrl.toString()}`);
+      // SOLUTION: Use the raw query string to preserve exact parameter format
+      // This is the key fix - instead of reconstructing the URL with potentially 
+      // modified parameters, we pass the raw query string directly
+      const targetUrl = `${webAppUrl}?${rawQueryString}`;
+      
+      showDebug(`Redirecting to: ${targetUrl}`);
       
       // Perform redirect after a short delay
       setTimeout(() => {
         try {
           // Open in same window/tab
-          window.location.href = targetUrl.toString();
+          window.location.href = targetUrl;
           
           // Alternative method if the above doesn't work
           setTimeout(() => {
-            window.location.replace(targetUrl.toString());
+            window.location.replace(targetUrl);
           }, 500);
         } catch (e) {
           errorDiv.style.display = 'block';
@@ -230,7 +213,7 @@
     
     // Check URL parameters on page load
     window.onload = function() {
-      // Always show parameters during troubleshooting
+      // Show parameters during troubleshooting if debug is enabled
       if (debug) {
         showDebug(`Parameters received: ${params.toString()}`);
         showParams();
