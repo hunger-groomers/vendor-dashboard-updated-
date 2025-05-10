@@ -114,7 +114,7 @@
   </div>
   <script>
     // UPDATE THIS URL with your deployed Google Apps Script web app URL
-    const webAppUrl = 'https://script.google.com/macros/s/AKfycbzFG4U1Z257cOYP_CiSo4X9qfAdsXzjgqmQj7-NPDvlRXlyyCpTMGGVZpyB6xYmo8Nu/exec';
+    const webAppUrl = 'https://script.google.com/macros/s/AKfycbxXeqeoyiAtuVKm9vPyx4UJtY7HdPEz4LRW6B0HV_fF37lRee7vxIboLdX1XEiGCv3-/exec';
     
     const params = new URLSearchParams(window.location.search);
     const btn = document.getElementById('redirectBtn');
@@ -130,24 +130,30 @@
     const requestId = params.get('requestId'); // Alternative parameter name
     const recordId = params.get('recordId'); // Alternative parameter name
     
-    // Ensure the ID doesn't have any encoding issues or whitespace
-    if (id) {
-      // Clean the ID parameter - trim whitespace and ensure proper encoding
-      id = id.trim();
-    }
+    // For debugging - IMPORTANT: Enable this during troubleshooting
+    const debug = true;
+    
+    // Ensure the ID doesn't have any encoding issues
+    // FIXED: Don't try to clean or modify the ID - pass it exactly as received
     
     // Display parameters for debugging
     function showParams() {
       if (params.toString()) {
         paramsInfoDiv.style.display = 'block';
-        paramsInfoDiv.innerHTML = `Parameters received: ${params.toString()}<br>Cleaned ID: ${id || 'none'}`;
+        paramsInfoDiv.innerHTML = `Parameters received: ${params.toString()}<br>
+                                   ID: ${id || 'none'}<br>
+                                   UserId: ${userId || 'none'}<br>
+                                   RequestId: ${requestId || 'none'}<br>
+                                   RecordId: ${recordId || 'none'}`;
       }
     }
     
     // For direct testing functionality
     function showDebug(message) {
-      debugDiv.style.display = 'block';
-      debugDiv.textContent = message;
+      if (debug) {
+        debugDiv.style.display = 'block';
+        debugDiv.textContent = message;
+      }
     }
     
     // Check if we have any valid parameter
@@ -167,12 +173,14 @@
       // Build the target URL - start fresh to avoid any URL encoding issues
       let targetUrl = new URL(webAppUrl);
       
+      // FIXED: Preserve the exact parameter value without modification
       // Add all valid parameters to the URL using URLSearchParams for proper encoding
       if (row) {
         targetUrl.searchParams.append('row', row);
       }
       
       if (id) {
+        // FIXED: Pass the ID exactly as received, let the server handle decoding
         targetUrl.searchParams.append('id', id);
       }
       
@@ -187,6 +195,9 @@
       if (recordId) {
         targetUrl.searchParams.append('recordId', recordId);
       }
+      
+      // Always add debug mode when redirecting
+      targetUrl.searchParams.append('debug', 'true');
       
       // Show loading animation
       loader.style.display = 'block';
@@ -219,15 +230,15 @@
     
     // Check URL parameters on page load
     window.onload = function() {
+      // Always show parameters during troubleshooting
+      if (debug) {
+        showDebug(`Parameters received: ${params.toString()}`);
+        showParams();
+      }
+      
       // Show error if no valid parameters
       if (!hasValidParams()) {
         errorDiv.style.display = 'block';
-      }
-      
-      // Enable debug mode with URL parameter
-      if (params.get('debug') === 'true') {
-        showDebug(`Parameters received: ${params.toString()}`);
-        showParams();
       }
       
       // Auto-redirect if autoRedirect parameter is present
